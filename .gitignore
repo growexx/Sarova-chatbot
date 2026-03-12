@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Pytest cache
+.pytest_cache/
+
+# IDEs and editor folders
+.vscode/
+.idea/
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# sonar files and directories
+sonar-project.properties
+sonar_executor
+coverage.xml
+
+# project-specific ignores
+code_modules/
+Wallet_Americanachatbotdb/
+config.ini
+oci.admin1.dev-2026-01-28T06_51_42.364Z.pem
+pytest.ini
+
+# exclude other local settings
+*.env
+
+# keep sensitive files out
+

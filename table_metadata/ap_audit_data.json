@@ -1,0 +1,108 @@
+{
+  "table_metadat":"To determine if the same user created and approved an invoice Use INV_CREATOR_NAME = APPROVER_FULL_NAME",
+  "columns":{
+    "INVOICE_ID": {
+      "type": "NUMBER(15)"
+    },
+    "INVOICE_NUM": {
+      "type": "VARCHAR2(50 CHAR)",
+      "values": "alphanumeric_string"
+    },
+    "INVOICE_CURRENCY_CODE": {
+      "type": "VARCHAR2(15 CHAR)",
+      "values": ["AED", "EGP", "EUR", "KWD", "SAR", 
+      "USD", "GBP", "CHF", "AUD", "QAR", "BHD", "OMR"]
+    },
+    "PAYMENT_CURRENCY_CODE": {
+      "type": "VARCHAR2(15 CHAR)",
+      "values": ["AED", "EGP", "EUR", "KWD", "SAR", 
+      "USD", "GBP", "CHF", "AUD", "QAR", "BHD", "OMR"]
+    },
+    "INVOICE_AMOUNT": {
+      "type": "NUMBER"
+    },
+    "AMOUNT_PAID": {
+      "type": "NUMBER"
+    },
+    "INVOICE_DATE": {
+      "type": "DATE",
+      "examples": ["15-03-21","22-11-23","09-07-22","30-01-24"]
+    },
+    "INVOICE_TYPE_LOOKUP_CODE": {
+      "type": "VARCHAR2(25 CHAR)",
+      "values": ["EXPENSE REPORT", "PREPAYMENT", "STANDARD", "DEBIT", "CREDIT","MIXED"]
+    },
+    "PAYMENT_STATUS_FLAG": {
+      "type": "VARCHAR2(1 CHAR)",
+      "values": ["Y", "N", "P"]
+    },
+    "CREATION_DATE": {
+      "type": "DATE",
+      "examples":["30-04-24","14-11-21","08-10-24","07-05-23"]
+    },
+    "CREATED_BY_ID": {
+      "type": "NUMBER(15)",
+      "description":"Not to be compare with approver_id"
+    },
+    "APPROVED_AMOUNT": {
+      "type": "NUMBER"
+    },
+    "ORG_ID": {
+      "type": "NUMBER"
+    },
+   
+    "WFAPPROVAL_STATUS": {
+      "type": "VARCHAR2(50 CHAR)",
+      "values": ["NOT REQUIRED", "WFAPPROVED", "MANUALLY APPROVED", "REJECTED", "INITIATED","NEEDS WFREAPPROVAL"]
+    },
+    "VENDOR_ID": {
+      "type": "NUMBER(15)",
+      "examples": [1579, 2869, 3161, 240194, 154276]
+    },
+    "VENDOR_NAME": {
+      "type": "VARCHAR2(240 CHAR)"
+    },
+    "BUSINESS_UNIT":{
+      "type":"VARCHAR2(240 CHAR)",
+      "values":["ADC OU","AFIGC OU","Beefy OU","CGPI OU","ECC OU",
+      "FF OU","FF-KSA OU","GFC OU","GFI OU","ICAPP OU","KFC OU","NFCC OU",
+      "NFCM OU","Senyorita_OU","Farm Frites -MENA OU","KFCHO OU"]
+    },
+    "APPROVAL_HISTORY_ID": {
+      "type": "NUMBER(15)"
+    },
+    "ITERATION":{
+      "type":"NUMBER(9)",
+      "values":[1,2,3,4,5,6,7]
+    },
+    "RESPONSE": {
+      "type": "VARCHAR2(50 CHAR)",
+      "values":["APPROVED"]
+    },
+    "APPROVER_ID": {
+      "type": "NUMBER(15)",
+      "desciption":"Not to be compared with creator_by_id"
+    },
+    "EMPLOYEE_ID": {
+      "type": "NUMBER(15)"
+    },
+    "USER_ID": {
+      "type": "NUMBER(15)"
+    },
+    "USER_NAME": {
+      "type": "VARCHAR2(100 CHAR)"
+    },
+    "APPROVER_NAME": {
+      "type": "VARCHAR2(150 CHAR)",
+      "desciption":"Short name for approver,not to be used for filtering or matching unless explicitly stated"
+    },
+    "APPROVER_FULL_NAME": {
+      "type": "VARCHAR2(240 CHAR)",
+      "desciption":"In our use case, we use this column to compare approver of invoice, it can also be used to match with creator name"
+    },
+    "INV_CREATOR_NAME": {
+      "type": "VARCHAR2(240 CHAR)",
+      "desciption":"In our use case, we use this column to compare creator of invoice"
+    }  
+  }
+}

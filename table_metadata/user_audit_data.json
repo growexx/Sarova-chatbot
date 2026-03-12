@@ -1,0 +1,41 @@
+{
+  "APPLICATION_ID": {
+    "type": "NUMBER(15)",
+    "values":[101,200]
+  },
+  "RESPONSIBILITY_ID": {
+    "type": "NUMBER(15)"
+  },
+  "RESPONSIBILITY_KEY": {
+    "type": "VARCHAR2(30 CHAR)"
+  },
+  "RESPONSIBILITY_NAME": {
+    "type": "VARCHAR2(100 CHAR)"
+  },
+  "USER_ID": {
+    "type": "NUMBER(15)"
+  },
+  "USER_NAME": {
+    "type": "VARCHAR2(100 CHAR)"
+  },
+  "DESCRIPTION": {
+    "type": "VARCHAR2(240 CHAR)"
+  },
+  "LAST_UPDATE_DATE": {
+    "type": "DATE"
+  },
+  "LAST_UPDATED_BY": {
+    "type": "NUMBER(15)"
+  },
+  "CREATION_DATE": {
+    "type": "DATE"
+  },
+  "CREATED_BY": {
+    "type": "NUMBER(15)"
+  },
+  "LEDGER":{
+    "type": "VARCHAR2(30 CHAR)",
+    "values":["AP","GL","BOTH"],
+    "metadata": "Refers to ledger User is assigned to , It can be AP or GL or it can be both"
+  }
+}

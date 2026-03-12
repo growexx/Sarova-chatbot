@@ -1,0 +1,15 @@
+Use the following to generate appropriate response
+
+1. SQL QUERY USED TO FETCH DATA:
+<SQL_QUERY>
+{sql_query}
+</SQL_QUERY>
+
+2. DATA SIZE:
+Records : {num_records}
+Fields : {num_fields}
+
+3. DATA RECORDS (Maximum 20 rows from dataframe):
+<DATA_RECORDS>
+{data_records}
+</DATA_RECORDS>

@@ -1,0 +1,109 @@
+{
+  "metadata":"To determine if the same user created and approved an invoice Use JOURNAL_BATCH_APPROVER_NAME = JOURNAL_BATCH_CREATOR_NAME",
+  "columns":{
+    "JE_BATCH_ID": {
+      "type": "NUMBER(15)"
+    },
+    "BATCH_NAME": {
+      "type": "VARCHAR2(100 CHAR)"
+    },
+    "STATUS": {
+      "type": "VARCHAR2(20 CHAR)",
+      "values":["Unposted", "Posted", "Created"]
+    },
+    "ACTUAL_FLAG": {
+      "type": "VARCHAR2(1 CHAR)",
+      "values":["A"]
+    },
+    "BUDGETARY_CONTROL_STATUS": {
+      "type": "VARCHAR2(1 CHAR)",
+      "values":["N","P"]
+    },
+    "APPROVAL_STATUS_CODE": {
+      "type": "VARCHAR2(1 CHAR)",
+      "values":["A"]
+    },
+    "BATCH_CREATION_DATE": {
+      "type": "DATE"
+    },
+    "BATCH_CREATED_BY": {
+      "type": "NUMBER(15)"
+    },
+    "POSTED_DATE": {
+      "type": "DATE"
+    },
+    "DESCRIPTION": {
+      "type": "VARCHAR2(240 CHAR)"
+    },
+    "BATCH_DR": {
+      "type": "NUMBER"
+    },
+    "BATCH_CR": {
+      "type": "NUMBER"
+    },
+    "APPROVER_EMPLOYEE_ID": {
+      "type": "NUMBER(15)"
+    },
+    "JE_HEADER_ID": {
+      "type": "NUMBER(15)"
+    },
+    "LEDGER_ID": {
+      "type": "NUMBER(15)"
+    },
+    "JE_CATEGORY": {
+      "type": "VARCHAR2(25 CHAR)"
+    },
+    "JE_SOURCE": {
+      "type": "VARCHAR2(25 CHAR)"
+    },
+    "PERIOD_NAME": {
+      "type": "VARCHAR2(15 CHAR)"
+    },
+    "JOURNAL_NAME": {
+      "type": "VARCHAR2(100 CHAR)"
+    },
+    "CURRENCY_CODE": {
+      "type": "VARCHAR2(15 CHAR)",
+      "values":["EGP","SAR","KWD","USD","AED","EUR","GBP"]
+    },
+    "JOURNAL_STATUS": {
+      "type": "VARCHAR2(1 CHAR)",
+      "values":["U","P","N"]
+    },
+    "JOURNAL_DR": {
+      "type": "NUMBER"
+    },
+    "JOURNAL_CR": {
+      "type": "NUMBER"
+    },
+    "JOURNAL_CREATION_DATE": {
+      "type": "DATE"
+    },
+    "JOURNAL_CREATED_BY": {
+      "type": "NUMBER(15)"
+    },
+    "LEDGER_NAME": {
+      "type": "VARCHAR2(30 CHAR)",
+      "values":["ICAPP GL", "KSA GL", "Senyorita_Ledger", "KWT GL", "ECC GL", "Beefy GL", "FF GL", "AGE GL", "UAE GL", "UAE GL USD", "FF-MENA GL", "ARCL GL"]
+    },
+    "LEDGER_CATEGORY_CODE": {
+      "type": "VARCHAR2(30 CHAR)",
+      "values":["PRIMARY"]
+    },
+    "LEDGER_CREATED_BY_ID": {
+      "type": "NUMBER(15)",
+      "values":[1111,1579,5994,3124]
+    },
+    "LEDGER_CREATED_BY": {
+      "type": "VARCHAR2(100 CHAR)",
+      "values":["FIN_IMPL","ABDULRAHMAN_IT","MARWA_IT","SBABU"]
+    },
+    "JOURNAL_BATCH_APPROVER_NAME": {
+      "type": "VARCHAR2(240 CHAR)"
+    },
+    "JOURNAL_BATCH_CREATOR_NAME": {
+      "type": "VARCHAR2(240 CHAR)"
+    }
+  }
+}
+
