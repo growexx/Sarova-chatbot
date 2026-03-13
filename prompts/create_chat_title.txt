@@ -1,0 +1,16 @@
+Generate a title from the user query.
+
+Return ONLY valid JSON in the following format:
+{
+  "title": "<3 to 5 word title>"
+}
+
+Rules:
+- Title must be exactly 3–5 words
+- No punctuation
+- No quotes inside the title
+- No extra text outside JSON
+- Do NOT include explanations
+
+User query: {user_query}
+

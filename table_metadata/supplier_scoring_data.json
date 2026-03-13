@@ -1,0 +1,59 @@
+{
+    "table_name": "supplier_scoring_data",
+    "table_metadata": "This table evaluates supplier performance based on procurement transactions for hotel inventory items. Each record represents a supplier providing a specific SKU. The table captures transaction counts, total quantity supplied, procurement spend, average unit price, and a computed supplier performance score. Items follow a hierarchy where CATEGORY represents the top-level grouping (e.g., Food or Beverage), ITEM_GROUP represents the subcategory, and SKU_NAME represents the specific product supplied.",
+  
+    "columns": {
+  
+      "ITEM_NAME": {
+        "type": "VARCHAR2",
+        "description": "Specific inventory product supplied by vendors"
+      },
+  
+      "VENDOR": {
+        "type": "VARCHAR2",
+        "description": "Name of the supplier or vendor providing the inventory item"
+      },
+  
+      "ANNUAL_PURCHASE_FREQUENCY": {
+        "type": "NUMBER",
+        "description": "Number of procurement transactions completed with the supplier for the given SKU"
+      },
+  
+      "TOTAL_QTY_SUPPLIED": {
+        "type": "NUMBER",
+        "description": "Total quantity of the SKU supplied by the vendor across transactions"
+      },
+  
+      "TOTAL_MONEY_SPEND": {
+        "type": "NUMBER",
+        "description": "Total procurement spend for the SKU from the supplier"
+      },
+  
+      "AVG_UNIT_PRICE": {
+        "type": "NUMBER",
+        "description": "Average price per unit calculated from procurement transactions"
+      },
+  
+      "VENDOR_SCORE": {
+        "type": "NUMBER",
+        "description": "Composite supplier performance score derived from price competitiveness, reliability, and transaction history"
+      },
+  
+      "VENDOR`_RANK": {
+        "type": "NUMBER",
+        "description": "Rank assigned to the supplier for the SKU based on the final supplier score"
+      },
+  
+      "CATEGORY": {
+        "type": "VARCHAR2",
+        "values": ["FOOD", "BEVERAGE"],
+        "description": "Top-level inventory category used for procurement classification"
+      },
+  
+      "ITEM_GROUP": {
+        "type": "VARCHAR2",
+        "description": "Subcategory of the item within the broader category (e.g., Dry Goods, Seafood, Brandy)"
+      }
+  
+    }
+  }

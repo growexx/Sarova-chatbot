@@ -1,0 +1,46 @@
+{
+    "table_name": "occupancy_revenue_data",
+    "table_metadata": "This table stores daily hotel performance metrics for the Sarova hotel. It contains historical and predicted occupancy percentages and daily revenue values. The data spans from 1 Jan 2024 to 31 Dec 2025 and is used for analyzing hotel demand, revenue trends, and seasonal patterns.",
+    "columns": {
+      
+      "DATE_COL": {
+        "type": "DATE",
+        "description": "Calendar date for the recorded hotel metrics,in format 'DD-MM-YYYY'"
+      },
+  
+      "OCCUPANCY": {
+        "type": "NUMBER",
+        "description": "Hotel room occupancy percentage for the given date, example values range from 0 to 100  "
+      },
+  
+      "REVENUE": {
+        "type": "NUMBER", 
+        "description": "Total hotel revenue generated on the given date"
+      },
+  
+      "YEAR": {
+        "type": "NUMBER",
+        "values": [2024, 2025],
+        "description": "Year extracted from DATE_COL used for yearly analysis"
+      },
+  
+      "QUARTER": {
+        "type": "NUMBER",
+        "values": [1, 2, 3, 4],
+        "description": "Quarter derived from DATE_COL used for quarterly reporting"
+      },
+  
+      "DATA_TYPE": {
+        "type": "VARCHAR2",
+        "values": ["HISTORICAL", "FORECASTED"],
+        "description": "Indicates whether the data point is historical or model predicted"
+      },
+  
+      "MONTH": {
+        "type": "VARCHAR2",
+        "values": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+        "description": "Month derived from DATE_COL used for monthly analysis"
+      }
+  
+    }
+  }
