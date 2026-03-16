@@ -57,8 +57,8 @@ class OCIObjectStorageClient(object):
         self.client = oci.object_storage.ObjectStorageClient(oci_config)
 
     def put_file_in_bucket_folder(self, local_file_path, bucket_folder_name):
+        print(f"local file path is {local_file_path}")
         with open(local_file_path, "rb") as f:
-
             object_name = bucket_folder_name + '/' +  local_file_path.split('/')[-1]
             response = self.client.put_object( self.bucket_info['namespace'], self.bucket_info['bucket_name'], object_name, f )
             print(f"file write in bucket folder finished. response status code is {response}")
@@ -180,10 +180,6 @@ class OCIObjectStorageClient(object):
                 os.remove(local_file_path)
                 logger.info(f"Temp file {local_file_path} removed")
 
-    # ------------------------------------------------------------------ #
-    #  PAR (Pre-Authenticated Request) helper                             #
-    # ------------------------------------------------------------------ #
-
     def _create_par_url(self, object_name: str) -> str:
         """
         Create a time-limited Pre-Authenticated Request URL for an object
@@ -221,3 +217,4 @@ class OCIObjectStorageClient(object):
         par_url = f"https://objectstorage.{region}.oraclecloud.com{access_uri}"
         logger.info(f"PAR URL created: {par_url}")
         return par_url
+

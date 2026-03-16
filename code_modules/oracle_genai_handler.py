@@ -34,16 +34,17 @@ class LLMInference:
     better integration with the chatbot's session management.
     """
 
-    def __init__(self, config_file: str = 'config.ini'):
+    def __init__(self, config_file: str = 'config.ini', model_id: Optional[str] = None):
         """
         Initialize the OCI LLM client.
         Args:
             config_file (str): Path to OCI configuration file
+            model_id (str, optional): Override model ID from config. If None, uses GENAI.model_id.
         """
         try:
             # OCI Configuration
             genai_config = configparser.ConfigParser()
-            genai_config.read('config.ini')
+            genai_config.read(config_file)
             
             self.compartment_id = genai_config['GENAI']['compartment_id']
             self.CONFIG_PROFILE = "DEFAULT"
@@ -59,11 +60,14 @@ class LLMInference:
                     timeout=(5, 30)
                 )
             )
+            # Model: use override if provided, else config
+            if model_id is None:
+                model_id = genai_config["GENAI"]["model_id"].strip()
             # Chat configuration
             self.chat_detail = oci.generative_ai_inference.models.ChatDetails(
                 compartment_id=self.compartment_id,
                 serving_mode=oci.generative_ai_inference.models.OnDemandServingMode(
-                    model_id=(genai_config["GENAI"]["model_id"])
+                    model_id=model_id
                 )
             )
             logger.info("OCI LLM client initialized successfully")
@@ -228,11 +232,27 @@ class LLMInference:
 # Convenience function for easy integration with main6.py
 def create_llm_client(config_file: str = 'config.ini') -> LLMInference:
     """
-    Factory function to create and return an LLM client.
+    Factory function to create and return an LLM client (default model for text2sql, chat, etc.).
     Args:
         config_file (str): Path to OCI configuration file
     Returns:
         LLMInference: Initialized LLM client
     """
     return LLMInference(config_file)
+
+
+def create_guardrail_llm_client(config_file: str = 'config.ini') -> LLMInference:
+    """
+    Factory function to create an LLM client for guardrail checks only.
+    Uses GENAI.guard_rail_model_id from config so guardrail can use a different model
+    than text2sql/chat.
+    Args:
+        config_file (str): Path to OCI configuration file
+    Returns:
+        LLMInference: Initialized LLM client with guardrail model ID
+    """
+    genai_config = configparser.ConfigParser()
+    genai_config.read(config_file)
+    guard_model_id = genai_config["GENAI"]["guard_rail_model_id"].strip()
+    return LLMInference(config_file, model_id=guard_model_id)
 # ---------------------------------------------------------------------------------------------------------------------------------

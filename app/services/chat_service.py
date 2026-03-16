@@ -16,10 +16,9 @@ import uuid
 from code_modules.oracle_adb_handler import OracleADBClient
 from config_loader import load_adw_config
 from code_modules.prompt_generator import PromptGenerator
-from code_modules.llm_response_extractor import LLMResponseExtractor 
-# , smart_reorder , smart_column_insertion
+from code_modules.llm_response_extractor import LLMResponseExtractor , classify_query
 from code_modules.sql_queries_loader import SqlQueryLoader
-from code_modules.oracle_genai_handler import create_llm_client
+from code_modules.oracle_genai_handler import create_llm_client , create_guardrail_llm_client
 from code_modules.oci_object_storage import OCIObjectStorageClient
 from code_modules.sql_query_modifier import add_distinct_safely ,ensure_fetch_first_clause , wrap_query_with_count
 from typing import Optional, Tuple
@@ -36,6 +35,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import matplotlib.pyplot as plt
 import seaborn as sns
+# , smart_reorder , smart_column_insertion
 
 
 _PARALLEL_EXECUTOR = ThreadPoolExecutor(max_workers=2)
@@ -57,7 +57,6 @@ def _load_all_metadata() -> str:
     return re.sub(r'\s+', ' ', metadata_string).strip()
 
 _ALL_METADATA_STRING: str = _load_all_metadata()
-
 
 def generate_categorical_plots( df: pd.DataFrame, output_dir: str,file_prefix: str, max_categories: int = 15 ) -> list[str]:
     """
@@ -86,6 +85,7 @@ def generate_categorical_plots( df: pd.DataFrame, output_dir: str,file_prefix: s
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
  
     if not categorical_cols or not numeric_cols:
+        print("No categorical and Numerical columns found")
         return plot_paths
  
     num_col = numeric_cols[0]
@@ -159,10 +159,10 @@ def generate_categorical_plots( df: pd.DataFrame, output_dir: str,file_prefix: s
         plt.savefig(path, dpi=150, bbox_inches="tight")
         plt.close()
         plot_paths.append(path)
- 
+    else:
+        print("No categorical columns found")
     return plot_paths
  
-
 def prepare_metadata_string(tables):
     """
     Prepare metadata string for prompt construction."""
@@ -187,6 +187,17 @@ def check_if_df_all_null_or_zero(df: pd.DataFrame) -> bool:
         bool: True if all values are null or zero, otherwise False.
     """
     return bool(((df.isna()) | (df == 0)).all().all())
+
+def wrap_par_around_file(file_path,bucket_folder_name):
+    return f"https://objectstorage.me-dubai-1.oraclecloud.com/p/oawta1HMX-BgQZkdRtaJUVt6E8lTOa5vEzC3ZqeIuc7i649VOG2VHlBRxinPm8Ny/n/bmb8tbvmgtsy/b/Sarova_extended/o/{bucket_folder_name}/{file_path}"
+
+def prepare_local_file_and_par_url(file_prefix:str = "result_data", bucket_folder_name: str = "Sarova_Table_files")  -> Tuple[str, str]:
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    unique_id = uuid.uuid4().hex[:8]
+    local_filename = f"{file_prefix}_{timestamp}_{unique_id}.xlsx"
+    object_name = bucket_folder_name +'/' + os.path.basename(local_filename)
+    par_url=f"https://objectstorage.me-dubai-1.oraclecloud.com/p/oawta1HMX-BgQZkdRtaJUVt6E8lTOa5vEzC3ZqeIuc7i649VOG2VHlBRxinPm8Ny/n/bmb8tbvmgtsy/b/Sarova_extended/o/{object_name}"
+    return local_filename, par_url
 
 class JumpToFinally(Exception):
     """Custom exception just to jump to finally"""
@@ -215,6 +226,7 @@ class ChatService:
         self.adb_client = OracleADBClient(load_adw_config())
         self.sql_loader = SqlQueryLoader()
         self.object_storage_client = OCIObjectStorageClient()
+        self.guardrail_llm_client = create_guardrail_llm_client()
 
     @staticmethod
     def log_time(label, start_time):
@@ -228,8 +240,11 @@ class ChatService:
         """
         user_guard_rail_message = f"User message is '{user_message}'"
         raw = self.prompt_generator_client.guardrail_check_inference_call(
-            self.llm_inference_client, user_guard_rail_message
+            self.guardrail_llm_client, user_guard_rail_message
         )
+        # raw = self.prompt_generator_client.guardrail_check_inference_call(
+        #     self.llm_inference_client, user_guard_rail_message
+        # )
         if raw == RAW_MESSAGE:
             return raw
         print(f"Guard rail raw response is{raw}")
@@ -265,15 +280,6 @@ class ChatService:
             {"sql_query": "","scenario": "raw_text", "error_flag": 0}
         )
         return {"sql_query": sql_query, "scenario": scenario ,"error_status": error_status}
-
-    @staticmethod
-    def _prepare_local_file_and_par_url(file_prefix:str = "result_data", bucket_folder_name: str = "Sarova_Table_files")  -> Tuple[str, str]:
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        unique_id = uuid.uuid4().hex[:8]
-        local_filename = f"{file_prefix}_{timestamp}_{unique_id}.xlsx"
-        object_name = bucket_folder_name +'/' + os.path.basename(local_filename)
-        par_url=f"https://objectstorage.me-dubai-1.oraclecloud.com/p/oawta1HMX-BgQZkdRtaJUVt6E8lTOa5vEzC3ZqeIuc7i649VOG2VHlBRxinPm8Ny/n/bmb8tbvmgtsy/b/Sarova_extended/o/{object_name}"
-        return local_filename, par_url
 
     async def _background_message_insert(self,rows):
         bulk_insert = self.sql_loader.insert_chat_history_bulk(rows)
@@ -311,11 +317,8 @@ class ChatService:
             }
 
     async def _background_small_file_write(self,sql_query :str ,local_file_path:str,bucket_folder_name: str ):
-        # sql_query = ensure_fetch_first_clause(query = sql_query,limit=10000)
         try:
             oci_client = OCIObjectStorageClient()
-            
-
             oci_client.put_file_in_bucket_folder(local_file_path, bucket_folder_name)
             os.remove(local_file_path)
 
@@ -332,8 +335,6 @@ class ChatService:
                 "par": None,
             }
 
-    
-
     async def handle_inquiry(self, user_id: str, chat_id: str, user_message: str, app_state):
         """
         Handle a user chat inquiry end-to-end.
@@ -345,6 +346,8 @@ class ChatService:
         if guardrail says irrelevant → reject immediately (don't care about SQL gen result)
         if guardrail says relevant → continue with SQL gen result then execute SQL, generate response, etc.
         """
+        
+        
         final_response = {
             "chat_id": chat_id,
             "llm_response": "Failed due to error",
@@ -437,6 +440,12 @@ class ChatService:
 
             print(f"[SQL Gen] Generated SQL: {sql_query} and scenario is {scenario}")
 
+            query_type = classify_query(sql_query)
+            if query_type in ("WINDOW","KPI","AGGREGATION"):
+                scenario = "analysis"
+            else:
+                scenario = "raw_text"
+
             # ── Execute SQL ────────────────────────────────────────────────
             print(50 * '═', " SQL Execution ", 50 * '═')
             start = time.perf_counter()
@@ -524,25 +533,37 @@ class ChatService:
                     (chat_id, message_no + 2, message, "assistant"),
                     (chat_id, message_no + 3, sql_query, "SQL")]
 
-            if scenario == 'analysis':
-                plot_path = generate_categorical_plots(selected_df, 'temp_graph','graph')[0]
+
+            if num_of_records >100:
+                local_file_path, actual_par = prepare_local_file_and_par_url()
+                print("Writing in par file")
+                asyncio.create_task(self._background_file_w_background_large_file_write(max_limit_query,local_file_path))
                 final_response = self.prepare_data_response(
-                    selected_df, sql_query, message ,scenario,None
+                    selected_df.head(20), sql_query, message ,"raw_data", actual_par
+                )
+            elif scenario == 'raw_data':
+                local_file_path, actual_par = prepare_local_file_and_par_url()
+                selected_df.to_excel(local_file_path, index=False)
+                asyncio.create_task(self._background_small_file_write(max_limit_query,local_file_path,"Sarova_Table_files"))
+                print(f"plot path is {plot_path}")
+                final_response = self.prepare_data_response(
+                    selected_df.head(20), sql_query, message ,scenario,actual_par
                 )
             else:
-
-                local_file_path, actual_par = self._prepare_local_file_and_par_url()
-                selected_df.to_excel(local_file_path, index=False)
-                print("Writing in par file")
-                # asyncio.create_task(self._background_file_write(max_limit_query,local_file_path))
-                if num_of_records<100:
-                    asyncio.create_task(self._background_small_file_write(max_limit_query,local_file_path,"Sarova_Table_files"))
+                plot_paths = generate_categorical_plots(selected_df, 'temp_graph','graph')
+                print(f"plot path is {plot_paths}")
+                if len(plot_paths)!=0  :
+                    plot_path = plot_paths[0]
+                    asyncio.create_task(self._background_small_file_write(max_limit_query,plot_path,"Sarova_Diagrams"))
+                    actual_par = wrap_par_around_file(plot_path.split("/")[-1],"Sarova_Diagrams")
                 else:
-                    print("File too big to write")
+                    actual_par = None
                 final_response = self.prepare_data_response(
-                    selected_df.head(20), sql_query, message ,scenario, actual_par
+                    selected_df, sql_query, message ,scenario, actual_par
                 )
-                rows.append((chat_id, message_no + 4, actual_par, "PAR"))
+                print("Writing in par file")
+                
+            rows.append((chat_id, message_no + 4, actual_par, "PAR"))
             asyncio.create_task(self._background_message_insert(rows))
         except JumpToFinally:
             pass
@@ -634,7 +655,8 @@ class ChatService:
         """
 
         user_guard_rail_message= f"User message is '{user_message}'"
-        guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.llm_inference_client, user_guard_rail_message)
+        # guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.llm_inference_client, user_guard_rail_message)
+        guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.guardrail_llm_client, user_guard_rail_message)
 
         self.llm_response_extractor.set_data(guard_rail_result)
         print(f"Guard rail result is {guard_rail_result}")
