@@ -63,7 +63,7 @@
   
       "YEAR": {
         "type": "NUMBER",
-        "values": [2024, 2025],
+        "values": [2024, 2025, 2026],
         "description": "Year derived from the consumption date"
       },
   
@@ -99,6 +99,11 @@
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
         ],
         "description": "Month derived from the consumption date for seasonal analysis"
+      },
+      "DATA_TYPE":{
+        "type":"VARCHAR2",
+        "values":["HISTORICAL","FORECAST"],
+        "description":"Determines whether the data is forcasted or historical"
       }
   
     }
