@@ -49,46 +49,16 @@ class LLMResponseExtractor:
         return tuple(self.get(f, defaults.get(f)) for f in fields)
 
 
-ap_column_prirority ={
-    "BUSINESS_UNIT":1,
-    "VENDOR_NAME":2,
-    "INVOICE_NUM":3,
-    "INVOICE_DATE":4,
-    "INVOICE_AMOUNT":5,
-    "INVOICE_CURRENCY_CODE":6,
-    "WFAPPROVAL_STATUS":7,
-    "PAYMENT_STATUS_FLAG":8,
-    "INV_CREATOR_NAME":9,
-    "APPROVER_FULL_NAME":10
+inventory_consumption_data_prirority ={
+    "ITEM_GROUP":1 , "ITEM_NAME":2 ,"TOTAL_ITEM_CONSUMED":3 ,  "QUARTER":4, "YEAR":5
 }
 
-gl_column_priority={
-"LEDGER_ID":1,
-"LEDGER_NAME":2,
-"LEDGER_CATEGORY_CODE":3,
-"LEDGER_CREATED_BY":4,
-"PERIOD_NAME":5,
-"JE_SOURCE":6,
-"JE_CATEGORY":7,
-"BATCH_NAME":8,
-"JOURNAL_NAME":9,
-"CURRENCY_CODE":10,
-"POSTED_DATE":11,
-"JOURNAL_DR":12,
-"JOURNAL_CR":13,
-"APPROVAL_STATUS_CODE":14,
-"JOURNAL_STATUS":15
+occupancy_revenue_data_priority={
+    "date_col":1, "occupancy":2, "revenue":3 , "data_type":4 ,"year":5
 }
 
-user_column_priority = {
-"APPLICATION_ID":1,
-"RESPONSIBILITY_NAME":2,
-"USER_ID":3,
-"USER_NAME":4,
-"DESCRIPTION":5,
-"ROLE_ACCESS":6,
-"CREATION_DATE":7,
-"LAST_UPDATE_DATE":8
+supplier_scoring_data_priority = {
+    "item_group":1, "item_name":2, "total_qty_supplied":3, "supplier":4, "category":5
 }
 
 SQL_KEYWORDS = {
@@ -96,8 +66,10 @@ SQL_KEYWORDS = {
     "order","fetch","limit","union","on"
 }
 
-gl_necessary_fields = ["ledger_id" ,"ledger_name" , "ledger_category_code"  , "ledger_created_by" ]
-user_necessary_fields = ["user_id" , "user_name" ,"description" ,"creation_date" "role_access"]
+inventory_consumption_data_necessary_fields = ["item_group" , "item_name" ,"total_item_consumed",  "quarter", "year"]
+occupancy_revenue_data_necessary_fields = ["date_col", "occupancy", "revenue" , "data_type" ,"year"]
+supplier_scoring_data_necessary_fields = ["item_group", "item_name", "total_qty_supplied", "supplier", "category"]
+
 
 def smart_reorder(query, columns):
     """
@@ -106,15 +78,15 @@ def smart_reorder(query, columns):
     print(f"smart reorder start with input columns {columns}")
     query_lower = query.lower()
 
-    if "ap_audit_data" in query_lower:
-        table_column_priority = ap_column_prirority
-        print('ap audit data reorder started')
-    elif "gl_audit_data" in query_lower:
-        print('gl audit data reorder started')
-        table_column_priority = gl_column_priority
-    elif "user_audit_data" in query_lower:
-        print('user audit data reorder started')
-        table_column_priority = user_column_priority
+    if "inventory_consumption_data" in query_lower:
+        table_column_priority = inventory_consumption_data_prirority
+        print('invenoryt consumption data reorder started')
+    elif "occupancy_revenue_data" in query_lower:
+        print('daily occupancy revenue data reorder started')
+        table_column_priority = occupancy_revenue_data_priority
+    elif "supplier_scoring_data" in query_lower:
+        print('supplier_scoring data reorder started')
+        table_column_priority = supplier_scoring_data_priority
     else:
         table_column_priority = {}
 
@@ -132,18 +104,22 @@ def smart_column_insertion(query):
     print('_'*50, "smart column insertion started",'_'*50)
     query_type =  classify_query(query)
     query_lower = query.lower()
-    if "ap_audit_data" in query_lower or query_type in ("AGGREGATION", "KPI","WINDOW","JOIN"):
-        print(f"Early exit triggered either by sql_type {query_type} or ap_audit_table found")
+    if query_type in ("AGGREGATION", "KPI","WINDOW","JOIN"):
+        print(f"Early exit triggered either by sql_type {query_type} found")
         print('_'*50, "smart column insertion ended early",'_'*50)
         return query
-    elif "gl_audit_data" in query_lower:
-        print('query references gl audit data')
-        insertion_fields = gl_necessary_fields
-        alias_name = extract_alias(query,"gl_audit_data")
-    elif "user_audit_data" in query_lower:
-        print('query references user audit data')
-        insertion_fields = user_necessary_fields
-        alias_name = extract_alias(query,"user_audit_data")
+    elif "inventory_consumption_data" in query_lower:
+        print('query references inventory_consumption_data')
+        insertion_fields = inventory_consumption_data_necessary_fields
+        alias_name = extract_alias(query,"inventory_consumption_data")
+    elif "occupancy_revenue_data" in query_lower:
+        print('query references user occupancy_revenue_data')
+        insertion_fields = occupancy_revenue_data_necessary_fields
+        alias_name = extract_alias(query,"occupancy_revenue_data")
+    elif "supplier_scoring_data" in query_lower:
+        print('query references supplier_scoring_data')
+        insertion_fields = supplier_scoring_data_necessary_fields
+        alias_name = extract_alias(query,"supplier_scoring_data")
     else:
         print('No idea what to do')
     present_cols = extract_select_columns(query)
@@ -187,7 +163,6 @@ def extract_select_columns(query):
     columns = match.group(1)
     return [c.strip() for c in columns.split(",")]
 
-
 def normalize_column(col):
     col = col.lower().strip()
     if "." in col:
@@ -216,7 +191,7 @@ def classify_query(sql: str) -> str:
         sql_type =  "WINDOW"
     elif "case when" in sql_lower and "count(" in sql_lower:
         sql_type =  "KPI"
-    elif any(agg in sql_lower for agg in ["count(", "sum(", "avg(", "min(", "max("]):
+    elif any(agg in sql_lower for agg in ["count(", "sum(", "avg(", "min(", "max(", "distinct("]):
         sql_type =  "AGGREGATION"
     elif "join " in sql_lower:
         sql_type =  "JOIN"

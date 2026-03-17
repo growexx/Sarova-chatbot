@@ -134,11 +134,15 @@ def ensure_fetch_first_clause(query: str, limit: int = 100) -> str:
  
     # Normalize whitespace
     query_clean = re.sub(r"\s+", " ", query_clean)
- 
+
     fetch_pattern = re.compile(
-        r"\bfetch\s+(first|next)\s+\d+\s+rows?\s+only\b",
+        r"fetch\s+(first|next)\s+\d+\s+rows?\s+only\s*$",
         re.IGNORECASE
     )
+    # fetch_pattern = re.compile(
+    #     r"\bfetch\s+(first|next)\s+\d+\s+rows?\s+only\b",
+    #     re.IGNORECASE
+    # )
  
     offset_pattern = re.compile(
         r"\boffset\s+\d+\s+rows\b",
