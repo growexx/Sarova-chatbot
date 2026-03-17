@@ -49,6 +49,32 @@ class LLMResponseExtractor:
         return tuple(self.get(f, defaults.get(f)) for f in fields)
 
 
+def extract_reply_message_from_raw(raw_text: str) -> str:
+    """
+    Extract reply_message from guardrail raw response when JSON parsing fails
+    (e.g. due to unescaped double/single quotes inside the string value).
+    Tries double-quoted then single-quoted value; unescapes \\n and \\".
+    """
+    if not raw_text or not isinstance(raw_text, str):
+        return ""
+    raw_text = raw_text.strip()
+    match = re.search(
+        r'"reply_message"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        raw_text,
+        re.DOTALL,
+    )
+    if not match:
+        match = re.search(
+            r'"reply_message"\s*:\s*\'((?:[^\'\\]|\\.)*)\'',
+            raw_text,
+            re.DOTALL,
+        )
+    if not match:
+        return ""
+    s = match.group(1).replace("\\n", "\n").replace('\\"', '"').replace("\\'", "'")
+    return s.strip()
+
+
 ap_column_prirority ={
     "BUSINESS_UNIT":1,
     "VENDOR_NAME":2,

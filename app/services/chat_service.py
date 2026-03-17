@@ -16,10 +16,10 @@ import uuid
 from code_modules.oracle_adb_handler import OracleADBClient
 from config_loader import load_adw_config
 from code_modules.prompt_generator import PromptGenerator
-from code_modules.llm_response_extractor import LLMResponseExtractor 
+from code_modules.llm_response_extractor import LLMResponseExtractor, extract_reply_message_from_raw 
 # , smart_reorder , smart_column_insertion
 from code_modules.sql_queries_loader import SqlQueryLoader
-from code_modules.oracle_genai_handler import create_llm_client
+from code_modules.oracle_genai_handler import create_llm_client, create_guardrail_llm_client
 from code_modules.oci_object_storage import OCIObjectStorageClient
 from code_modules.sql_query_modifier import add_distinct_safely ,ensure_fetch_first_clause , wrap_query_with_count
 from typing import Optional, Tuple
@@ -41,6 +41,7 @@ import seaborn as sns
 _PARALLEL_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 _ALL_TABLES = ["inventory_consumption_data", "occupancy_revenue_data", "supplier_scoring_data"]
 RAW_MESSAGE = "It is found that Oracle Genai has marked this in appropriate content and rejected it."
+
 
 def _load_all_metadata() -> str:
     """Load and cache all table metadata as a single string at import time."""
@@ -210,6 +211,7 @@ class ChatService:
         and response extractor.
         """
         self.llm_inference_client = create_llm_client()
+        self.guardrail_llm_client = create_guardrail_llm_client()
         self.llm_response_extractor = LLMResponseExtractor()
         self.prompt_generator_client = PromptGenerator()
         self.adb_client = OracleADBClient(load_adw_config())
@@ -228,7 +230,7 @@ class ChatService:
         """
         user_guard_rail_message = f"User message is '{user_message}'"
         raw = self.prompt_generator_client.guardrail_check_inference_call(
-            self.llm_inference_client, user_guard_rail_message
+            self.guardrail_llm_client, user_guard_rail_message
         )
         if raw == RAW_MESSAGE:
             return raw
@@ -236,11 +238,18 @@ class ChatService:
         # Use a fresh extractor per thread to avoid shared state mutation
         extractor = LLMResponseExtractor()
         extractor.set_data(raw)
-        relevant, tables = extractor.get_many(
-            ["relevant_question", "tables_related"],
-            {"relevant_question": "no", "tables_related": []}
+        relevant, tables, reply_message = extractor.get_many(
+            ["relevant_question", "tables_related", "reply_message"],
+            {"relevant_question": "no", "tables_related": [], "reply_message": ""}
         )
-        return {"relevant": relevant, "tables": tables}
+        reply_message = reply_message or ""
+        if isinstance(reply_message, str):
+            reply_message = reply_message.strip()
+        else:
+            reply_message = str(reply_message).strip() if reply_message else ""
+        if not reply_message and extractor.data.get("response"):
+            reply_message = extract_reply_message_from_raw(extractor.data["response"])
+        return {"relevant": relevant, "tables": tables, "reply_message": reply_message}
 
     def _run_text_2_sql(self, user_message: str, last_sql_query: str) -> dict:
         """
@@ -396,9 +405,10 @@ class ChatService:
 
             if relevant != "yes":
                 print("Query rejected by guardrail — discarding SQL gen result")
+                reply_message = guardrail_result.get("reply_message", "").strip()
                 final_response = {
                     "chat_id": chat_id,
-                    "llm_response": "Query rejected by guardrail due to irrelevance.",
+                    "llm_response": reply_message if reply_message else "Query rejected by guardrail due to irrelevance.",
                     "user_query": user_message,
                     "status": 2
                 }
@@ -619,29 +629,29 @@ class ChatService:
             "par": par
         }
 
-    def guard_rail(self, user_message,):
-        """
-        Apply guardrail validation to a user query.
+    # def guard_rail(self, user_message,):
+    #     """
+    #     Apply guardrail validation to a user query.
 
-        Uses an LLM-based guardrail to determine whether the query
-        is relevant and which database tables are required.
+    #     Uses an LLM-based guardrail to determine whether the query
+    #     is relevant and which database tables are required.
 
-        Args:
-            user_message (str): User's natural language query.
+    #     Args:
+    #         user_message (str): User's natural language query.
 
-        Returns:
-            tuple[str, list[str]]: Relevance flag and list of related tables.
-        """
+    #     Returns:
+    #         tuple[str, list[str]]: Relevance flag and list of related tables.
+    #     """
 
-        user_guard_rail_message= f"User message is '{user_message}'"
-        guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.llm_inference_client, user_guard_rail_message)
+    #     user_guard_rail_message= f"User message is '{user_message}'"
+    #     guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.guardrail_llm_client, user_guard_rail_message)
 
-        self.llm_response_extractor.set_data(guard_rail_result)
-        print(f"Guard rail result is {guard_rail_result}")
+    #     self.llm_response_extractor.set_data(guard_rail_result)
+    #     print(f"Guard rail result is {guard_rail_result}")
 
-        relevant, tables = self.llm_response_extractor.get_many(["relevant_question", "tables_related"],{"relevant_question":"no","tables_related":[]})
+    #     relevant, tables = self.llm_response_extractor.get_many(["relevant_question", "tables_related"],{"relevant_question":"no","tables_related":[]})
 
-        return relevant , tables
+    #     return relevant , tables
 
     def text_2_sql(self, user_message, tables, last_sql_query, metadata):
         """
