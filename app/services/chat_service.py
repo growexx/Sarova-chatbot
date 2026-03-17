@@ -12,14 +12,13 @@ It integrates database access, LLM inference, prompt generation,
 response parsing, and visualization utilities.
 """
 import os
-import uuid
 from code_modules.oracle_adb_handler import OracleADBClient
 from config_loader import load_adw_config
 from code_modules.prompt_generator import PromptGenerator
-from code_modules.llm_response_extractor import LLMResponseExtractor, extract_reply_message_from_raw 
+from code_modules.llm_response_extractor import LLMResponseExtractor 
 # , smart_reorder , smart_column_insertion
 from code_modules.sql_queries_loader import SqlQueryLoader
-from code_modules.oracle_genai_handler import create_llm_client, create_guardrail_llm_client
+from code_modules.oracle_genai_handler import create_llm_client
 from code_modules.oci_object_storage import OCIObjectStorageClient
 from code_modules.sql_query_modifier import add_distinct_safely ,ensure_fetch_first_clause , wrap_query_with_count
 from typing import Optional, Tuple
@@ -27,167 +26,21 @@ import json
 import pandas as pd
 from code_modules.oracle_adb_handler import OracleADBClient
 from datetime import datetime
-import traceback
-import re
-import numpy as np
-import time
 from app.services.title import create_new_chat_title
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import matplotlib.pyplot as plt
-import seaborn as sns
-
+import traceback
+import numpy as np
+import time
+from code_modules.utils import (_ALL_METADATA_STRING , check_if_df_all_null_or_zero ,prepare_local_file_and_par_url , wrap_par_around_file, 
+                                generate_categorical_plots , prepare_metadata_string , log_time)
 
 _PARALLEL_EXECUTOR = ThreadPoolExecutor(max_workers=2)
-_ALL_TABLES = ["inventory_consumption_data", "occupancy_revenue_data", "supplier_scoring_data"]
+
 RAW_MESSAGE = "It is found that Oracle Genai has marked this in appropriate content and rejected it."
 
 
-def _load_all_metadata() -> str:
-    """Load and cache all table metadata as a single string at import time."""
-    metadata_string = ""
-    for table in _ALL_TABLES:
-        file_name = f"table_metadata/{table.lower()}.json"
-        try:
-            with open(file_name, "r") as f:
-                metadata = json.load(f)
-            metadata_string += f"\n\n### TABLE: {table.upper()}\n"
-            metadata_string += json.dumps(metadata, indent=2)
-        except FileNotFoundError:
-            pass
-    return re.sub(r'\s+', ' ', metadata_string).strip()
 
-_ALL_METADATA_STRING: str = _load_all_metadata()
-
-
-def generate_categorical_plots( df: pd.DataFrame, output_dir: str,file_prefix: str, max_categories: int = 15 ) -> list[str]:
-    """
-    Generate categorical visualizations from a dataframe.
- 
-    Depending on the number of categorical columns, this function:
-    - Creates a bar chart for a single categorical column
-    - Creates a grouped bar chart or heatmap for two categorical columns
- 
-    The generated plots are saved to disk and their file paths are returned.
- 
-    Args:
-        df (pd.DataFrame): Input dataframe containing categorical and numeric data.
-        output_dir (str): Directory where plots will be saved.
-        file_prefix (str): Prefix used for plot file names.
-        max_categories (int, optional): Maximum number of categories to display.
- 
-    Returns:
-        list[str]: List of generated plot file paths.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-    plot_paths = []
- 
-    # Detect columns
-    categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
-    numeric_cols = df.select_dtypes(include="number").columns.tolist()
- 
-    if not categorical_cols or not numeric_cols:
-        return plot_paths
- 
-    num_col = numeric_cols[0]
- 
-    # -----------------------
-    # CASE 1: One categorical
-    # -----------------------
-    if len(categorical_cols) == 1:
-        cat = categorical_cols[0]
- 
-        # Reduce categories
-        if df[cat].nunique() > max_categories:
-            df = df.nlargest(max_categories, num_col)
- 
-        df_sorted = df.sort_values(num_col, ascending=False)
- 
-        plt.figure(figsize=(8, 4))
-        sns.barplot(data=df_sorted, x=cat, y=num_col)
-        plt.xticks(rotation=45, ha="right")
-        plt.title(f"{num_col} by {cat}")
- 
-        path = os.path.join(output_dir, f"{file_prefix}_{cat}_bar.png")
-        plt.savefig(path, dpi=150, bbox_inches="tight")
-        plt.close()
- 
-        plot_paths.append(path)
- 
-    # -----------------------
-    # CASE 2: Two categoricals
-    # -----------------------
-    elif len(categorical_cols) >= 2:
-        cat1, cat2 = categorical_cols[:2]
- 
-        # Reduce cardinality
-        if df[cat1].nunique() > max_categories:
-            top_cat1 = (
-                df.groupby(cat1)[num_col].sum()
-                .nlargest(max_categories)
-                .index
-            )
-            df = df[df[cat1].isin(top_cat1)]
- 
-        # Few values → Grouped Bar
-        if df[cat2].nunique() <= 5:
-            plt.figure(figsize=(9, 4))
-            sns.barplot(data=df, x=cat1, y=num_col, hue=cat2)
-            plt.xticks(rotation=45, ha="right")
-            plt.title(f"{num_col} by {cat1} and {cat2}")
- 
-            path = os.path.join(
-                output_dir, f"{file_prefix}_{cat1}_{cat2}_grouped_bar.png"
-            )
- 
-        # Many values → Heatmap
-        else:
-            pivot = df.pivot_table(
-                index=cat2,
-                columns=cat1,
-                values=num_col,
-                aggfunc="sum"
-            )
- 
-            plt.figure(figsize=(10, 6))
-            sns.heatmap(pivot, cmap="Blues")
-            plt.title(f"{num_col} Heatmap ({cat1} vs {cat2})")
- 
-            path = os.path.join(
-                output_dir, f"{file_prefix}_{cat1}_{cat2}_heatmap.png"
-            )
- 
-        plt.savefig(path, dpi=150, bbox_inches="tight")
-        plt.close()
-        plot_paths.append(path)
- 
-    return plot_paths
- 
-
-def prepare_metadata_string(tables):
-    """
-    Prepare metadata string for prompt construction."""
-    metadata_string = ""
-
-    for table in tables:
-        file_name = f"table_metadata/{table.lower()}.json"
-        with open(file_name, "r") as f:
-            metadata = json.load(f)
-        metadata_string += f"\n\n### TABLE: {table.upper()}\n"
-        metadata_string += json.dumps(metadata, indent=2)
-    return metadata_string
-
-def check_if_df_all_null_or_zero(df: pd.DataFrame) -> bool:
-    """
-    Check whether all values in the dataframe are null or zero.
-
-    Args:
-        df (pd.DataFrame): Dataframe to evaluate.
-
-    Returns:
-        bool: True if all values are null or zero, otherwise False.
-    """
-    return bool(((df.isna()) | (df == 0)).all().all())
 
 class JumpToFinally(Exception):
     """Custom exception just to jump to finally"""
@@ -217,11 +70,7 @@ class ChatService:
         self.adb_client = OracleADBClient(load_adw_config())
         self.sql_loader = SqlQueryLoader()
         self.object_storage_client = OCIObjectStorageClient()
-
-    @staticmethod
-    def log_time(label, start_time):
-        elapsed = time.perf_counter() - start_time
-        print(f"[TIMER] {label} took {elapsed:.4f} seconds")
+        self.guardrail_llm_client = create_guardrail_llm_client()
 
     def _run_guardrail(self, user_message: str) -> dict:
         """
@@ -232,24 +81,20 @@ class ChatService:
         raw = self.prompt_generator_client.guardrail_check_inference_call(
             self.guardrail_llm_client, user_guard_rail_message
         )
+        # raw = self.prompt_generator_client.guardrail_check_inference_call(
+        #     self.llm_inference_client, user_guard_rail_message
+        # )
         if raw == RAW_MESSAGE:
             return raw
         print(f"Guard rail raw response is{raw}")
         # Use a fresh extractor per thread to avoid shared state mutation
         extractor = LLMResponseExtractor()
         extractor.set_data(raw)
-        relevant, tables, reply_message = extractor.get_many(
-            ["relevant_question", "tables_related", "reply_message"],
-            {"relevant_question": "no", "tables_related": [], "reply_message": ""}
+        relevant, tables = extractor.get_many(
+            ["relevant_question", "tables_related"],
+            {"relevant_question": "no", "tables_related": []}
         )
-        reply_message = reply_message or ""
-        if isinstance(reply_message, str):
-            reply_message = reply_message.strip()
-        else:
-            reply_message = str(reply_message).strip() if reply_message else ""
-        if not reply_message and extractor.data.get("response"):
-            reply_message = extract_reply_message_from_raw(extractor.data["response"])
-        return {"relevant": relevant, "tables": tables, "reply_message": reply_message}
+        return {"relevant": relevant, "tables": tables}
 
     def _run_text_2_sql(self, user_message: str, last_sql_query: str) -> dict:
         """
@@ -275,15 +120,6 @@ class ChatService:
         )
         return {"sql_query": sql_query, "scenario": scenario ,"error_status": error_status}
 
-    @staticmethod
-    def _prepare_local_file_and_par_url(file_prefix:str = "result_data", bucket_folder_name: str = "Sarova_Table_files")  -> Tuple[str, str]:
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        unique_id = uuid.uuid4().hex[:8]
-        local_filename = f"{file_prefix}_{timestamp}_{unique_id}.xlsx"
-        object_name = bucket_folder_name +'/' + os.path.basename(local_filename)
-        par_url=f"https://objectstorage.me-dubai-1.oraclecloud.com/p/oawta1HMX-BgQZkdRtaJUVt6E8lTOa5vEzC3ZqeIuc7i649VOG2VHlBRxinPm8Ny/n/bmb8tbvmgtsy/b/Sarova_extended/o/{object_name}"
-        return local_filename, par_url
-
     async def _background_message_insert(self,rows):
         bulk_insert = self.sql_loader.insert_chat_history_bulk(rows)
         start = time.perf_counter()
@@ -291,17 +127,17 @@ class ChatService:
             self.adb_client.execute_multiple_non_query(
                 conn, bulk_insert["query"], bulk_insert["params"]
             )
-        self.log_time("DB insert chat messages", start)
+        log_time("DB insert chat messages", start)
 
     async def _background_large_file_write(self,sql_query :str ,local_file_path:str):
         sql_query = ensure_fetch_first_clause(query = sql_query,limit=10000)
         try:
             print("Large file write started.")
-            folder = f""
+            folder = f"Sarova_Table_files/"
             with self.adb_client.get_connection() as conn:
                 chunk_gen = self.adb_client.stream_query_chunks(conn, sql_query)
 
-                self.oci_client.stream_chunks_to_excel_and_upload(
+                self.object_storage_client.stream_chunks_to_excel_and_upload(
                     chunk_generator=chunk_gen,
                     local_file_path=local_file_path,
                     bucket_folder_name = folder
@@ -320,11 +156,8 @@ class ChatService:
             }
 
     async def _background_small_file_write(self,sql_query :str ,local_file_path:str,bucket_folder_name: str ):
-        # sql_query = ensure_fetch_first_clause(query = sql_query,limit=10000)
         try:
             oci_client = OCIObjectStorageClient()
-            
-
             oci_client.put_file_in_bucket_folder(local_file_path, bucket_folder_name)
             os.remove(local_file_path)
 
@@ -341,8 +174,6 @@ class ChatService:
                 "par": None,
             }
 
-    
-
     async def handle_inquiry(self, user_id: str, chat_id: str, user_message: str, app_state):
         """
         Handle a user chat inquiry end-to-end.
@@ -354,6 +185,7 @@ class ChatService:
         if guardrail says irrelevant → reject immediately (don't care about SQL gen result)
         if guardrail says relevant → continue with SQL gen result then execute SQL, generate response, etc.
         """
+
         final_response = {
             "chat_id": chat_id,
             "llm_response": "Failed due to error",
@@ -362,6 +194,7 @@ class ChatService:
         }
 
         try:
+            print(f"User message is {user_message}")
             # ── Prepare last SQL (needed by SQL gen worker) ────────────────
             last_sql_query_of_chat = app_state.last_sql_queries
             last_sql_query = last_sql_query_of_chat.get(chat_id, None)
@@ -401,14 +234,15 @@ class ChatService:
 
             relevant = guardrail_result["relevant"]
             tables = guardrail_result["tables"]
-            print(f"[Guardrail] relevant={relevant}, tables={tables}")
+            reply_message = guardrail_result["reply_message"]
+
+            print(f"[Guardrail] relevant={relevant}, tables={tables} , Reply message={reply_message}")
 
             if relevant != "yes":
                 print("Query rejected by guardrail — discarding SQL gen result")
-                reply_message = guardrail_result.get("reply_message", "").strip()
                 final_response = {
                     "chat_id": chat_id,
-                    "llm_response": reply_message if reply_message else "Query rejected by guardrail due to irrelevance.",
+                    "llm_response": "Query rejected by guardrail due to irrelevance.",
                     "user_query": user_message,
                     "status": 2
                 }
@@ -426,7 +260,7 @@ class ChatService:
                 raise JumpToFinally()
 
 
-            self.log_time("PARALLEL guardrail + SQL gen", parallel_start)
+            log_time("PARALLEL guardrail + SQL gen", parallel_start)
             # ── Unpack SQL gen ─────────────────────────────────────────────
             sql_query = sql_result["sql_query"]
             error_status = sql_result["error_status"]
@@ -447,10 +281,16 @@ class ChatService:
 
             print(f"[SQL Gen] Generated SQL: {sql_query} and scenario is {scenario}")
 
+            query_type = classify_query(sql_query)
+            if query_type in ("WINDOW","KPI","AGGREGATION"):
+                scenario = "analysis"
+            else:
+                scenario = "raw_text"
+
             # ── Execute SQL ────────────────────────────────────────────────
             print(50 * '═', " SQL Execution ", 50 * '═')
             start = time.perf_counter()
-            # sql_query = smart_column_insertion(add_distinct_safely(sql_query))
+            sql_query = smart_column_insertion((sql_query))
             sql_query = add_distinct_safely(sql_query)
             max_limit_query =  ensure_fetch_first_clause(sql_query,10000)
             limited_query = ensure_fetch_first_clause(sql_query,100)
@@ -461,7 +301,7 @@ class ChatService:
                 num_of_records = self.adb_client.execute_scalar(conn, count_query)
 
             print(f"{num_of_records} records found.")
-            self.log_time("SQL Execution", start)
+            log_time("SQL Execution", start)
 
             df_is_empty = check_if_df_all_null_or_zero(selected_df)
 
@@ -476,6 +316,9 @@ class ChatService:
 
             selected_df.drop_duplicates(inplace=True)
             print(f"DataFrame shape: {selected_df.shape}")
+            
+            ordered_columns = smart_reorder(sql_query,selected_df.columns)
+            selected_df = selected_df[ordered_columns]
 
             print(50 * '═', " Context Management ", 50 * '═')
 
@@ -522,7 +365,7 @@ class ChatService:
 
             start = time.perf_counter()
             result = self.llm_inference_client.inference_from_chat_history(chat_history)
-            self.log_time("LLM Chat Inference", start)
+            log_time("LLM Chat Inference", start)
             extractor = LLMResponseExtractor()
             extractor.set_data(result)
             message = extractor.get("message", "")
@@ -534,25 +377,37 @@ class ChatService:
                     (chat_id, message_no + 2, message, "assistant"),
                     (chat_id, message_no + 3, sql_query, "SQL")]
 
-            if scenario == 'analysis':
-                plot_path = generate_categorical_plots(selected_df, 'temp_graph','graph')[0]
+
+            if num_of_records >100:
+                local_file_path, actual_par = prepare_local_file_and_par_url()
+                print("Writing in par file")
+                asyncio.create_task(self._background_large_file_write(max_limit_query,local_file_path))
                 final_response = self.prepare_data_response(
-                    selected_df, sql_query, message ,scenario,None
+                    selected_df.head(20), sql_query, message ,"raw_data", actual_par
+                )
+            elif scenario == 'raw_data':
+                local_file_path, actual_par = prepare_local_file_and_par_url()
+                selected_df.to_excel(local_file_path, index=False)
+                asyncio.create_task(self._background_small_file_write(max_limit_query,local_file_path,"Sarova_Table_files"))
+                print(f"plot path is {plot_path}")
+                final_response = self.prepare_data_response(
+                    selected_df.head(20), sql_query, message ,scenario,actual_par
                 )
             else:
-
-                local_file_path, actual_par = self._prepare_local_file_and_par_url()
-                selected_df.to_excel(local_file_path, index=False)
-                print("Writing in par file")
-                # asyncio.create_task(self._background_file_write(max_limit_query,local_file_path))
-                if num_of_records<100:
-                    asyncio.create_task(self._background_small_file_write(max_limit_query,local_file_path,"Sarova_Table_files"))
+                plot_paths = generate_categorical_plots(selected_df, 'temp_graph','graph')
+                print(f"plot path is {plot_paths}")
+                if len(plot_paths)!=0  :
+                    plot_path = plot_paths[0]
+                    asyncio.create_task(self._background_small_file_write(max_limit_query,plot_path,"Sarova_Diagrams"))
+                    actual_par = wrap_par_around_file(plot_path.split("/")[-1],"Sarova_Diagrams")
                 else:
-                    print("File too big to write")
+                    actual_par = None
                 final_response = self.prepare_data_response(
                     selected_df.head(20), sql_query, message ,scenario, actual_par
                 )
-                rows.append((chat_id, message_no + 4, actual_par, "PAR"))
+                print("Writing in par file")
+                
+            rows.append((chat_id, message_no + 4, actual_par, "PAR"))
             asyncio.create_task(self._background_message_insert(rows))
         except JumpToFinally:
             pass
@@ -643,8 +498,8 @@ class ChatService:
     #         tuple[str, list[str]]: Relevance flag and list of related tables.
     #     """
 
-    #     user_guard_rail_message= f"User message is '{user_message}'"
-    #     guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.guardrail_llm_client, user_guard_rail_message)
+        user_guard_rail_message= f"User message is '{user_message}'"
+        guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.llm_inference_client, user_guard_rail_message)
 
     #     self.llm_response_extractor.set_data(guard_rail_result)
     #     print(f"Guard rail result is {guard_rail_result}")
@@ -682,6 +537,7 @@ class ChatService:
         return sql_query, error_status
 
     def reconnnect_conn_and_get_df(self, given_query):
+        print("Given query dring execurion is ",given_query)
         with self.adb_client.get_connection() as conn:
             return self.adb_client.execute_query_df(conn, given_query)
 
@@ -790,12 +646,11 @@ class ChatService:
                         "role": row["ROLE"].lower(),
                         "message": row["MESSAGE"]
                     })
-                    i=i+1
-                    print(i)
                 elif row["ROLE"].upper() == "SQL":
                     try:
-                        print(f"message i is {i}")
-                        message_content =self.reconnnect_conn_and_get_df(ensure_fetch_first_clause(row["MESSAGE"],100)).replace([np.nan, np.inf, -np.inf], None).to_dict(orient="records")
+                        sql_query = row["MESSAGE"]
+                        print(f"message i is {i} , {sql_query}")
+                        message_content =self.reconnnect_conn_and_get_df(ensure_fetch_first_clause(row["MESSAGE"],20)).replace([np.nan, np.inf, -np.inf], None).to_dict(orient="records")
                         chat_history_front_end.insert(0,{
                             "role": row["ROLE"],
                             "message": message_content

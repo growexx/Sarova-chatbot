@@ -164,3 +164,16 @@ DEFAULT BEHAVIOR
 ────────────────────────
 33. If multiple interpretations exist, choose the most common business interpretation.
 34. If the user query is vague, generate a reasonable SQL query instead of asking clarifying questions.
+
+────────────────────────
+SQL SYNTAX SAFETY RULES
+────────────────────────
+ 
+35. Ensure all parentheses are properly opened and closed.
+36. Do not leave incomplete clauses such as:
+    - unfinished WHERE conditions
+    - incomplete subqueries
+37. Every subquery must be fully enclosed in parentheses.
+38. Do not end the SQL query with a semicolon (;).
+39. Ensure ORDER BY appears only after WHERE/GROUP BY.
+40. Ensure FETCH FIRST N ROWS ONLY appears only at the end of the query.
