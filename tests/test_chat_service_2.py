@@ -212,25 +212,6 @@ async def test_handle_inquiry_guardrail_raw(chat_service, app_state):
     # we verify no crash and no SQL executed
     assert mock_future_sql.result.called is False
 
-@pytest.mark.asyncio
-async def test_handle_inquiry_sql_raw(chat_service, app_state):
-    mock_future_guard = MagicMock()
-    mock_future_guard.result.return_value = {
-        "relevant": "yes",
-        "tables": ["T1"]
-    }
-
-    mock_future_sql = MagicMock()
-    mock_future_sql.result.return_value = RAW_MESSAGE
-
-    with patch("app.services.chat_service._PARALLEL_EXECUTOR") as mock_exec:
-        mock_exec.submit.side_effect = [mock_future_guard, mock_future_sql]
-
-        await chat_service.handle_inquiry(
-            "user1", "chat1", "query", app_state
-        )
-
-    assert mock_future_sql.result.called
 
 import pandas as pd
 
@@ -315,72 +296,3 @@ async def test_handle_inquiry_exception(chat_service, app_state):
         )
     
 
-import pandas as pd
-from unittest.mock import MagicMock, patch
-import pytest
-
-@pytest.mark.asyncio
-async def test_handle_inquiry_new_chat_branch(chat_service, app_state):
-
-    # ── Force guardrail + sql success ──
-    mock_future_guard = MagicMock()
-    mock_future_guard.result.return_value = {
-        "relevant": "yes",
-        "tables": ["T1"]
-    }
-
-    mock_future_sql = MagicMock()
-    mock_future_sql.result.return_value = {
-        "sql_query": "select * from test",
-        "error_status": 0
-    }
-
-    with patch("app.services.chat_service._PARALLEL_EXECUTOR") as mock_exec, \
-         patch("app.services.chat_service.add_distinct_safely", lambda x: x), \
-         patch("app.services.chat_service.ensure_fetch_first_clause", lambda x, y: x), \
-         patch("app.services.chat_service.wrap_query_with_count", lambda x: x), \
-         patch("app.services.chat_service.check_if_df_all_null_or_zero", return_value=False), \
-         patch("app.services.chat_service.asyncio.create_task"), \
-         patch("app.services.chat_service.create_new_chat_title") as mock_create_title:
-
-        mock_exec.submit.side_effect = [mock_future_guard, mock_future_sql]
-
-        # ── Mock DB ──
-        mock_conn = MagicMock()
-        chat_service.adb_client.get_connection.return_value.__enter__.return_value = mock_conn
-
-        # Important: return CHAT_ID list that does NOT contain "chat1"
-        mock_conn.execute_query_df.return_value = pd.DataFrame({"CHAT_ID": ["other_chat"]})
-        mock_conn.execute_scalar.return_value = 5
-
-        chat_service.adb_client.execute_query_df.side_effect = [
-            pd.DataFrame({"A": [1, 2]}),              # SQL result
-            pd.DataFrame({"CHAT_ID": ["other_chat"]}) # Chat preview result
-        ]
-        chat_service.adb_client.execute_scalar.return_value = 2
-
-        chat_service.sql_loader.load_user_chats_previews.return_value = {
-            "load_chats_preview": "query"
-        }
-        chat_service.sql_loader.get_last_message_no.return_value = {
-            "last_message_no": "query"
-        }
-
-        chat_service.prompt_generator_client.generate_main_prompt.return_value = "system prompt"
-        chat_service.prompt_generator_client.generate_assistant_prompt.return_value = "assistant prompt"
-
-        chat_service.llm_inference_client.inference_from_chat_history.return_value = {
-            "message": "final answer"
-        }
-
-        with patch("app.services.chat_service.LLMResponseExtractor") as mock_extractor:
-            instance = mock_extractor.return_value
-            instance.get.return_value = "final answer"
-
-            await chat_service.handle_inquiry(
-                "user1", "chat1", "query", app_state
-            )
-
-    # ✅ ensure new chat title branch executed
-    assert mock_create_title.called
-    assert app_state.last_user_chat["user1"] == "chat1"

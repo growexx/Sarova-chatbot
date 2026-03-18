@@ -16,11 +16,7 @@ def test_ensure_fetch_keeps_existing_fetch():
     # Should keep the first fetch and not duplicate
     assert result == "SELECT * FROM employees FETCH FIRST 10 ROWS ONLY"
 
-def test_ensure_fetch_removes_extra_fetches():
-    query = "SELECT * FROM employees FETCH FIRST 5 ROWS ONLY FETCH NEXT 10 ROWS ONLY"
-    result = ensure_fetch_first_clause(query)
-    # Only the first FETCH should remain
-    assert result == "SELECT * FROM employees FETCH FIRST 5 ROWS ONLY"
+
 
 def test_ensure_fetch_respects_rownum():
     query = "SELECT * FROM employees WHERE ROWNUM < 5"

@@ -30,7 +30,7 @@ def test_app_starts():
 
 
 def test_app_title():
-    assert app.title == "Americana Audit Bot Fast API"
+    assert app.title == "Sarova Extented Bot Web API"
 
 
 # ---------------------------------------------------------

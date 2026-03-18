@@ -142,3 +142,71 @@ def test_create_par_url(client, mock_oci_client):
     assert "objectstorage.eu-frankfurt-1.oraclecloud.com" in par_url
     assert "/p/some-uri" in par_url
     assert mock_oci_client.create_preauthenticated_request.called
+
+
+import pytest
+from unittest.mock import patch, MagicMock, mock_open
+
+
+@patch("code_modules.oci_object_storage.open", new_callable=mock_open, read_data=b"data")
+def test_put_file_in_bucket_folder_success(mock_file):
+    # Arrange
+    client = OCIObjectStorageClient()
+
+    # Mock bucket info
+    client.bucket_info = {
+        "namespace": "test_namespace",
+        "bucket_name": "test_bucket"
+    }
+
+    # Mock OCI client
+    mock_response = MagicMock()
+    client.client = MagicMock()
+    client.client.put_object.return_value = mock_response
+
+    # Act
+    result = client.put_file_in_bucket_folder(
+        "path/to/test_file.txt",
+        "folder"
+    )
+
+    # Assert
+    mock_file.assert_called_once_with("path/to/test_file.txt", "rb")
+
+    client.client.put_object.assert_called_once()
+    
+    args = client.client.put_object.call_args[0]
+
+    assert args[0] == "test_namespace"
+    assert args[1] == "test_bucket"
+    assert args[2] == "folder/test_file.txt"   # ✅ object name check
+
+    assert result == mock_response
+
+@patch("code_modules.oci_object_storage.open", new_callable=mock_open, read_data=b"data")
+def test_put_file_object_name_extraction(mock_file):
+    client = OCIObjectStorageClient()
+
+    client.bucket_info = {
+        "namespace": "ns",
+        "bucket_name": "bucket"
+    }
+
+    client.client = MagicMock()
+    client.client.put_object.return_value = "ok"
+
+    client.put_file_in_bucket_folder(
+        "/deep/path/myfile.csv",
+        "data-folder"
+    )
+
+    args = client.client.put_object.call_args[0]
+
+    assert args[2] == "data-folder/myfile.csv"
+
+@patch("code_modules.oci_object_storage.open", side_effect=FileNotFoundError)
+def test_put_file_file_not_found(mock_file):
+    client = OCIObjectStorageClient()
+
+    with pytest.raises(FileNotFoundError):
+        client.put_file_in_bucket_folder("invalid/path.txt", "folder")

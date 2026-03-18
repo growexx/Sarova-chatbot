@@ -20,6 +20,8 @@ from oci.exceptions import RequestException, ServiceError
 import configparser
 logger = logging.getLogger(__name__)
 
+default_config_path = 'config.ini'
+
 # app/exceptions/llm_exceptions.py
 
 class LLMInferenceError(RuntimeError):
@@ -34,7 +36,7 @@ class LLMInference:
     better integration with the chatbot's session management.
     """
 
-    def __init__(self, config_file: str = 'config.ini', model_id: Optional[str] = None):
+    def __init__(self, config_file: str = default_config_path, model_id: Optional[str] = None):
         """
         Initialize the OCI LLM client.
         Args:
@@ -45,7 +47,7 @@ class LLMInference:
             # OCI Configuration
             genai_config = configparser.ConfigParser()
             genai_config.read(config_file)
-            
+
             self.compartment_id = genai_config['GENAI']['compartment_id']
             self.CONFIG_PROFILE = "DEFAULT"
             self.config = oci.config.from_file(config_file, self.CONFIG_PROFILE)
@@ -230,7 +232,7 @@ class LLMInference:
 
 
 # Convenience function for easy integration with main6.py
-def create_llm_client(config_file: str = 'config.ini') -> LLMInference:
+def create_llm_client(config_file: str = default_config_path) -> LLMInference:
     """
     Factory function to create and return an LLM client (default model for text2sql, chat, etc.).
     Args:
@@ -241,7 +243,7 @@ def create_llm_client(config_file: str = 'config.ini') -> LLMInference:
     return LLMInference(config_file)
 
 
-def create_guardrail_llm_client(config_file: str = 'config.ini') -> LLMInference:
+def create_guardrail_llm_client(config_file: str = default_config_path) -> LLMInference:
     """
     Factory function to create an LLM client for guardrail checks only.
     Uses GENAI.guard_rail_model_id from config so guardrail can use a different model

@@ -101,6 +101,9 @@ def smart_reorder(query, columns):
 
 
 def smart_column_insertion(query):
+    """
+    Smart column inserrion adds columsn to the df
+    """
     print('_'*50, "smart column insertion started",'_'*50)
     query_type =  classify_query(query)
     query_lower = query.lower()
@@ -122,8 +125,8 @@ def smart_column_insertion(query):
         alias_name = extract_alias(query,"supplier_scoring_data")
     else:
         print('No idea what to do')
+        return query
     present_cols = extract_select_columns(query)
-    # present_cols = extract_select_columns(query)
     normalized_present = {normalize_column(c) for c in present_cols}
     print(f"{alias_name} is the alias name and present columns are {present_cols}")
 
@@ -147,11 +150,10 @@ def smart_column_insertion(query):
         query,
         flags=re.IGNORECASE | re.DOTALL
     )
-    print(f"new query is  {new_query}, while_old query was {query}")   
+    print(f"new query is  {new_query}, while_old query was {query}")
     print('_'*50, "smart column insertion ended",'_'*50)
     return new_query
-    
-    
+
 def extract_select_columns(query):
     match = re.search(r"select\s+distinct\s+(.*?)\s+from", query, re.IGNORECASE | re.DOTALL)
     if not match:

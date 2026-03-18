@@ -16,7 +16,7 @@ from code_modules.oracle_adb_handler import OracleADBClient
 from config_loader import load_adw_config
 from code_modules.prompt_generator import PromptGenerator
 from code_modules.llm_response_extractor import LLMResponseExtractor , classify_query ,smart_reorder , smart_column_insertion
-from code_modules.sql_queries_loader import SqlQueryLoader 
+from code_modules.sql_queries_loader import SqlQueryLoader
 from code_modules.oracle_genai_handler import create_llm_client , create_guardrail_llm_client
 from code_modules.oci_object_storage import OCIObjectStorageClient
 from code_modules.sql_query_modifier import add_distinct_safely ,ensure_fetch_first_clause , wrap_query_with_count
@@ -31,7 +31,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import traceback
 import numpy as np
 import time
-from code_modules.utils import (_ALL_METADATA_STRING , check_if_df_all_null_or_zero ,prepare_local_file_and_par_url , wrap_par_around_file, 
+from code_modules.utils import (_ALL_METADATA_STRING , check_if_df_all_null_or_zero ,prepare_local_file_and_par_url , wrap_par_around_file,
                                 generate_categorical_plots , prepare_metadata_string , log_time)
 
 _PARALLEL_EXECUTOR = ThreadPoolExecutor(max_workers=2)
@@ -78,9 +78,7 @@ class ChatService:
         raw = self.prompt_generator_client.guardrail_check_inference_call(
             self.guardrail_llm_client, user_guard_rail_message
         )
-        # raw = self.prompt_generator_client.guardrail_check_inference_call(
-        #     self.llm_inference_client, user_guard_rail_message
-        # )
+
         if raw == RAW_MESSAGE:
             return raw
         print(f"Guard rail raw response is{raw}")
@@ -88,8 +86,8 @@ class ChatService:
         extractor = LLMResponseExtractor()
         extractor.set_data(raw)
         relevant, tables , reply_message = extractor.get_many(
-            {"relevant_question": "no", "tables_related": [],"reply_message":"Query is rejected , please try again"}
-            ["relevant_question", "tables_related","reply_message"],
+            defaults={"relevant_question": "no", "tables_related": [], "reply_message":"Query is rejected , please try again"},
+            fields=["relevant_question", "tables_related","reply_message"]
         )
         return {"relevant": relevant, "tables": tables , "reply_message":reply_message}
 
@@ -185,18 +183,17 @@ class ChatService:
 
         final_response = {
             "chat_id": chat_id,
-            "llm_response": "Failed due to error",
-            "user_query": "",
+            "llm_response": "Failed due to unaccounted error",
+            "user_query": user_message,
             "status": 0
         }
 
         try:
             print(f"User message is {user_message}")
             # ── Prepare last SQL (needed by SQL gen worker) ────────────────
-            last_sql_query_of_chat = app_state.last_sql_queries
-            last_sql_query = last_sql_query_of_chat.get(chat_id, None)
-            print(last_sql_query)
+            last_sql_query = app_state.last_sql_queries.get(chat_id, None)
             last_sql_query = self.prepare_last_sql_query(last_sql_query, chat_id)
+            print(f"Found last sql query for chat_id {chat_id} is {last_sql_query}")
 
             # ── Fire guardrail + SQL gen in parallel ───────────────────────
             print(50 * '═', " PARALLEL: Guardrail + SQL Gen ", 50 * '═')
@@ -212,68 +209,49 @@ class ChatService:
 
             guardrail_result = future_guardrail.result()
             if guardrail_result == "LLM timeout error":
-                final_response = {
-                    "chat_id": chat_id,
-                    "llm_response": "Oracle Gen ai service is on time out error , Please try again ",
-                    "user_query": user_message,
-                    "status": 2
-                }
+                final_response['llm_response'] = "Oracle Gen ai service is on time out error , Please try again "
+                final_response['status']=2
                 raise JumpToFinally()
 
             if guardrail_result == RAW_MESSAGE:
-                final_response = {
-                    "chat_id": chat_id,
-                    "llm_response": f"{guardrail_result}, Either please change request , or if it seems appropriate.",
-                    "user_query": user_message,
-                    "status": 2
-                }
+                final_response ["llm_response"] = f"{guardrail_result}, Either please change request , or if it seems appropriate."
+                final_response ["status"]=2
                 raise JumpToFinally()
 
-            relevant = guardrail_result["relevant"]
-            tables = guardrail_result["tables"]
-            reply_message = guardrail_result["reply_message"]
+            relevant, tables, reply_message = (
+                guardrail_result["relevant"],
+                guardrail_result["tables"],
+                guardrail_result["reply_message"],
+            )
 
             print(f"[Guardrail] relevant={relevant}, tables={tables} , Reply message={reply_message}")
 
             if relevant != "yes":
                 print("Query rejected by guardrail — discarding SQL gen result , sending reply {reply_message}")
-                final_response = {
-                    "chat_id": chat_id,
-                    "llm_response": reply_message,
-                    "user_query": user_message,
-                    "status": 2
-                }
+                final_response["llm_response"]= reply_message
+                final_response["status"]= 2
                 raise JumpToFinally()
 
             sql_result = future_sql.result()
             print(f"SQL RAW RESULT IS {sql_result}")
             if sql_result ==  RAW_MESSAGE:
-                final_response = {
-                    "chat_id": chat_id,
-                    "llm_response": f"{sql_result}, Either please change request , or if it seems appropriate , please try again.",
-                    "user_query": user_message,
-                    "status": 2
-                }
+                final_response["llm_response"]= f"{sql_result}, Either please change request , or if it seems appropriate , please try again."
+                final_response["status"]= 2
                 raise JumpToFinally()
 
-
             log_time("PARALLEL guardrail + SQL gen", parallel_start)
+
             # ── Unpack SQL gen ─────────────────────────────────────────────
-            sql_query = sql_result["sql_query"]
-            error_status = sql_result["error_status"]
-            scenario = sql_result["scenario"]
+            sql_query, error_status, scenario = (
+                sql_result["sql_query"],
+                sql_result["error_status"],
+                sql_result["scenario"],
+            )
             print(f"[SQL Gen] error_status={error_status}")
 
             if error_status == 1 or error_status == "1":
-                final_response = {
-                    "chat_id": chat_id,
-                    "llm_response": (
-                        "Failed to generate query as it extends beyond the scope "
-                        "of Data. Please try with another query."
-                    ),
-                    "user_query": user_message,
-                    "status": 2
-                }
+                final_response["llm_response"] = "Failed to generate query as it extends beyond the scope of Data. Please try with another query."
+                final_response["status"]= 2
                 raise JumpToFinally()
 
             print(f"[SQL Gen] Generated SQL: {sql_query} and scenario is {scenario}")
@@ -287,8 +265,7 @@ class ChatService:
             # ── Execute SQL ────────────────────────────────────────────────
             print(50 * '═', " SQL Execution ", 50 * '═')
             start = time.perf_counter()
-            sql_query = smart_column_insertion((sql_query))
-            sql_query = add_distinct_safely(sql_query)
+            sql_query = add_distinct_safely(smart_column_insertion(sql_query))
             max_limit_query =  ensure_fetch_first_clause(sql_query,10000)
             limited_query = ensure_fetch_first_clause(sql_query,100)
             count_query = wrap_query_with_count(max_limit_query)
@@ -303,19 +280,14 @@ class ChatService:
             df_is_empty = check_if_df_all_null_or_zero(selected_df)
 
             if df_is_empty:
-                final_response = {
-                    "chat_id": chat_id,
-                    "llm_response": "No data found for following search",
-                    "sql_query": max_limit_query,
-                    "status": 3
-                }
+                final_response["llm_response"] = "No data found for following search",
+                final_response["sql_query"] = max_limit_query,
+                final_response["status"] = 3
                 raise JumpToFinally()
 
             selected_df.drop_duplicates(inplace=True)
             print(f"DataFrame shape: {selected_df.shape}")
-            
-            ordered_columns = smart_reorder(sql_query,selected_df.columns)
-            selected_df = selected_df[ordered_columns]
+            selected_df = selected_df[smart_reorder(sql_query,selected_df.columns)]
 
             print(50 * '═', " Context Management ", 50 * '═')
 
@@ -375,35 +347,8 @@ class ChatService:
                     (chat_id, message_no + 3, sql_query, "SQL")]
 
 
-            if num_of_records >100:
-                local_file_path, actual_par = prepare_local_file_and_par_url()
-                print("Writing in par file")
-                asyncio.create_task(self._background_large_file_write(max_limit_query,local_file_path))
-                final_response = self.prepare_data_response(
-                    selected_df.head(20), sql_query, message ,"raw_data", actual_par
-                )
-            elif scenario == 'raw_data':
-                local_file_path, actual_par = prepare_local_file_and_par_url()
-                selected_df.to_excel(local_file_path, index=False)
-                asyncio.create_task(self._background_small_file_write(max_limit_query,local_file_path,"Sarova_Table_files"))
-                print(f"plot path is {plot_path}")
-                final_response = self.prepare_data_response(
-                    selected_df.head(20), sql_query, message ,scenario,actual_par
-                )
-            else:
-                plot_paths = generate_categorical_plots(selected_df, 'temp_graph','graph')
-                print(f"plot path is {plot_paths}")
-                if len(plot_paths)!=0  :
-                    plot_path = plot_paths[0]
-                    asyncio.create_task(self._background_small_file_write(max_limit_query,plot_path,"Sarova_Diagrams"))
-                    actual_par = wrap_par_around_file(plot_path.split("/")[-1],"Sarova_Diagrams")
-                else:
-                    actual_par = None
-                final_response = self.prepare_data_response(
-                    selected_df.head(20), sql_query, message ,scenario, actual_par
-                )
-                print("Writing in par file")
-                
+
+            final_response , actual_par= self.scenario_based_response(num_of_records, selected_df,max_limit_query,sql_query, message,scenario)
             rows.append((chat_id, message_no + 4, actual_par, "PAR"))
             asyncio.create_task(self._background_message_insert(rows))
         except JumpToFinally:
@@ -416,8 +361,39 @@ class ChatService:
 
         return final_response
 
+    def scenario_based_response(self,num_of_records, selected_df,max_limit_query,sql_query, message,scenario):
+        if num_of_records >100:
+            local_file_path, actual_par = prepare_local_file_and_par_url()
+            print("Writing in par file")
+            asyncio.create_task(self._background_large_file_write(max_limit_query,local_file_path))
+            final_response = self.prepare_data_response(
+                selected_df.head(20), sql_query, message ,"raw_data", actual_par
+            )
+        elif scenario == 'raw_data':
+            local_file_path, actual_par = prepare_local_file_and_par_url()
+            selected_df.to_excel(local_file_path, index=False)
+            asyncio.create_task(self._background_small_file_write(max_limit_query,local_file_path,"Sarova_Table_files"))
+            final_response = self.prepare_data_response(
+                selected_df.head(20), sql_query, message ,scenario,actual_par
+            )
+        else:
+            plot_paths = generate_categorical_plots(selected_df, 'temp_graph','graph')
+            print(f"plot path is {plot_paths}")
+            if len(plot_paths)!=0  :
+                plot_path = plot_paths[0]
+                asyncio.create_task(self._background_small_file_write(max_limit_query,plot_path,"Sarova_Diagrams"))
+                actual_par = wrap_par_around_file(plot_path.split("/")[-1],"Sarova_Diagrams")
+            else:
+                actual_par = None
+            final_response = self.prepare_data_response(
+                selected_df.head(20), sql_query, message ,scenario, actual_par
+            )
+            print("Writing in par file")
+        return final_response , actual_par
+
     def prepare_last_sql_query(self,last_sql_query, chat_id):
         if last_sql_query is None:
+            print("Detecting if last sql query exists for this chat-id in DB, as it does not in app state")
             get_last_sql_query = self.sql_loader.last_sql_query_for_chat(chat_id)['last_sql_query_of_chat']
             with self.adb_client.get_connection() as conn:
                 last_sql_query = self.adb_client.execute_scalar(conn,get_last_sql_query)
@@ -468,8 +444,6 @@ class ChatService:
         """
         # ── Small result: return inline ────────────────────────────────────
         if selected_df is not None:
-            # column_order = smart_reorder(sql_query, selected_df.columns)
-            # selected_df = selected_df.replace([np.nan, np.inf, -np.inf], None)[column_order].to_dict(orient="records")
             selected_df = selected_df.replace([np.nan, np.inf, -np.inf], None).to_dict(orient="records")
 
         return {
@@ -480,31 +454,6 @@ class ChatService:
             "status": 1,
             "par": par
         }
-
-    def guard_rail(self, user_message,):
-        """
-        Apply guardrail validation to a user query.
-
-        Uses an LLM-based guardrail to determine whether the query
-        is relevant and which database tables are required.
-
-        Args:
-            user_message (str): User's natural language query.
-
-        Returns:
-            tuple[str, list[str]]: Relevance flag and list of related tables.
-        """
-
-        user_guard_rail_message= f"User message is '{user_message}'"
-        # guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.llm_inference_client, user_guard_rail_message)
-        guard_rail_result = self.prompt_generator_client.guardrail_check_inference_call(self.guardrail_llm_client, user_guard_rail_message)
-
-        self.llm_response_extractor.set_data(guard_rail_result)
-        print(f"Guard rail result is {guard_rail_result}")
-
-        relevant, tables = self.llm_response_extractor.get_many(["relevant_question", "tables_related"],{"relevant_question":"no","tables_related":[]})
-
-        return relevant , tables
 
     def text_2_sql(self, user_message, tables, last_sql_query, metadata):
         """
@@ -567,10 +516,6 @@ class ChatService:
             n = 6
             print(f"chat history length is {len(chat_history_df)}")
             while i < len(chat_history_df) and n > 0:
-                if n==0:
-                    print("exit condition triggered")
-                    print(f"{i}, {n}")
-                    break
                 row = chat_history_df.iloc[i]
                 if row["ROLE"].upper() == "PAR" or row["ROLE"].upper() == "SQL":
                     print("Message not be selected as it is par or sql")
@@ -633,10 +578,6 @@ class ChatService:
             n = 6
             print(f"chat history length is {len(chat_history_df)}")
             while i < len(chat_history_df) and n > 0:
-                if n==0:
-                    print("exit condition triggerd")
-                    print(f"{i}, {n}")
-                    break
                 row = chat_history_df.iloc[i]
                 if row["ROLE"].upper() == "PAR":
                     print(f"par message detected , lets see i and increment it {i}")
@@ -795,3 +736,4 @@ class ChatService:
                 "error_message":e,
                 "status":0
             }
+
