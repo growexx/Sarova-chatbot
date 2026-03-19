@@ -20,10 +20,10 @@ from code_modules.sql_queries_loader import SqlQueryLoader
 from code_modules.oracle_genai_handler import create_llm_client , create_guardrail_llm_client
 from code_modules.oci_object_storage import OCIObjectStorageClient
 from code_modules.sql_query_modifier import add_distinct_safely ,ensure_fetch_first_clause , wrap_query_with_count
+from code_modules.diagram_maker import smart_plot
 from typing import Optional, Tuple
 import json
 import pandas as pd
-from code_modules.oracle_adb_handler import OracleADBClient
 from datetime import datetime
 from app.services.title import create_new_chat_title
 import asyncio
@@ -33,6 +33,8 @@ import numpy as np
 import time
 from code_modules.utils import (_ALL_METADATA_STRING , check_if_df_all_null_or_zero ,prepare_local_file_and_par_url , wrap_par_around_file,
                                 generate_categorical_plots , prepare_metadata_string , log_time)
+
+
 
 _PARALLEL_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 
@@ -111,7 +113,7 @@ class ChatService:
         extractor.set_data(raw)
         sql_query,scenario, error_status = extractor.get_many(
             ["sql_query","scenario", "error_flag"],
-            {"sql_query": "","scenario": "raw_text", "error_flag": 0}
+            {"sql_query": "","scenario": "raw_data", "error_flag": 0}
         )
         return {"sql_query": sql_query, "scenario": scenario ,"error_status": error_status}
 
@@ -260,12 +262,13 @@ class ChatService:
             if query_type in ("WINDOW","KPI","AGGREGATION"):
                 scenario = "analysis"
             else:
-                scenario = "raw_text"
+                scenario = "raw_data"
 
             # ── Execute SQL ────────────────────────────────────────────────
             print(50 * '═', " SQL Execution ", 50 * '═')
             start = time.perf_counter()
-            sql_query = add_distinct_safely(smart_column_insertion(sql_query))
+            # sql_query = add_distinct_safely(smart_column_insertion(sql_query))
+            sql_query = add_distinct_safely(sql_query)
             max_limit_query =  ensure_fetch_first_clause(sql_query,10000)
             limited_query = ensure_fetch_first_clause(sql_query,100)
             count_query = wrap_query_with_count(max_limit_query)
@@ -329,6 +332,10 @@ class ChatService:
             assistant_prompt = self.prompt_generator_client.generate_assistant_prompt(
                 sql_query, selected_df , num_of_records
             )
+            for col in selected_df.columns:
+                if pd.api.types.is_datetime64_any_dtype(selected_df[col]):
+                    selected_df[col] = selected_df[col].dt.date
+
             chat_history.append({"role": "User", "message": user_message})
             chat_history.append({"role": "User", "message": assistant_prompt})
 
@@ -362,7 +369,8 @@ class ChatService:
         return final_response
 
     def scenario_based_response(self,num_of_records, selected_df,max_limit_query,sql_query, message,scenario):
-        if num_of_records >100:
+        if num_of_records > 100:
+            print("Case 1 : X Large data , We will make excel and pass it as ")
             local_file_path, actual_par = prepare_local_file_and_par_url()
             print("Writing in par file")
             asyncio.create_task(self._background_large_file_write(max_limit_query,local_file_path))
@@ -370,6 +378,7 @@ class ChatService:
                 selected_df.head(20), sql_query, message ,"raw_data", actual_par
             )
         elif scenario == 'raw_data':
+            print("Data is not large and scenario is raw data")
             local_file_path, actual_par = prepare_local_file_and_par_url()
             selected_df.to_excel(local_file_path, index=False)
             asyncio.create_task(self._background_small_file_write(max_limit_query,local_file_path,"Sarova_Table_files"))
@@ -377,7 +386,8 @@ class ChatService:
                 selected_df.head(20), sql_query, message ,scenario,actual_par
             )
         else:
-            plot_paths = generate_categorical_plots(selected_df, 'temp_graph','graph')
+            print(f"scenraio is analysis , {scenario}")
+            plot_paths = smart_plot(selected_df, 'temp_graph','graph')
             print(f"plot path is {plot_paths}")
             if len(plot_paths)!=0  :
                 plot_path = plot_paths[0]
@@ -388,7 +398,6 @@ class ChatService:
             final_response = self.prepare_data_response(
                 selected_df.head(20), sql_query, message ,scenario, actual_par
             )
-            print("Writing in par file")
         return final_response , actual_par
 
     def prepare_last_sql_query(self,last_sql_query, chat_id):

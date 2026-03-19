@@ -49,42 +49,50 @@ CONTEXT HANDLING (FOLLOW-UP QUESTIONS)
 COLUMN SELECTION RULES
 ────────────────────────
 
-17. Select only relevant business columns, such as: SKU name, item group, consumption quantity, occupancy, revenue, seasonality index, 
+17. Select only relevant business columns, such as: item name, item group, consumption quantity, occupancy, revenue, seasonality index, 
 reorder point, estimated stock, expected demand, stockout risk, stockout category, date or time attributes
 18. Use SELECT * only if the user explicitly asks for:
 "all information"
 "everything"
 "full details"
 19. Otherwise return only relevant columns.
+20. Whenever a generated SQL query includes time-related columns (such as date, month, or year), ensure that the query includes an ORDER BY clause based on those respective columns.
 
 ────────────────────────
 FILTERING RULES
 ────────────────────────
 
-20. If categorical values are present in metadata, use ONLY those values.
-21. Reject queries that require values outside metadata.
-22. Use IN (...) for multi-value filters.
-23. For status-type columns (e.g., STOCKOUT_CATEGORY), use case-insensitive comparisons:
+21. If categorical values are present in metadata, use ONLY those values.
+22. Reject queries that require values outside metadata.
+23. Use IN (...) for multi-value filters.
+24. For status-type columns (e.g., STOCKOUT_CATEGORY), use case-insensitive comparisons:
 LOWER(column_name)
 Example:
-LOWER(stockout_category) = 'high stockout risk'
+LOWER(stockout_category) = 'high overstock risk'
+• If user writes "overstock risk", map to "High OverStock Risk" when appropriate.
+
+VALUE NORMALIZATION RULES
+• January → Jan
+• February → Feb
+• March → Mar
+• etc.
 
 ────────────────────────
 DATE HANDLING RULES
 ────────────────────────
 
-24. Use Oracle-compatible date functions.
-25. If the user specifies a month without a year, assume the current year.
-26. When recency or order is implied (e.g., latest, most recent, earliest):
+25. Use Oracle-compatible date functions.
+26. If the user specifies a month without a year, assume the current year.
+27. When recency or order is implied (e.g., latest, most recent, earliest):
 - Use ORDER BY <date_column>
 - Add <date_column> IS NOT NULL
-27. Use FETCH FIRST N ROWS ONLY when limiting results.
+28. Use FETCH FIRST N ROWS ONLY when limiting results.
 
 ────────────────────────
 AGGREGATION RULES
 ────────────────────────
 
-28. Use aggregation only when explicitly required:
+29. Use aggregation only when explicitly required:
 - COUNT / COUNT(DISTINCT ...) for counts
 - SUM for quantities or amounts
 - AVG only when requested
@@ -94,18 +102,60 @@ Total consumption → SUM(ITEM_CONSUMED)
 Average occupancy → AVG(OCCUPANCY)
 Total revenue → SUM(REVENUE)
 
-29. Do NOT aggregate unless necessary.
+30. Do NOT aggregate unless necessary.
 
 ────────────────────────
 SCENARIO CLASSIFICATION (STRICT)
 ────────────────────────
 
-30. You must classify every query into exactly one of: "raw_data" or "analysis"
+31. You must classify every query into exactly one of: "raw_data" or "analysis"
 
 A. ALWAYS classify as "raw_data" if the user query contains ANY of:
    - "top"
    - "bottom"
-   - "highest"
+   - "highest"WITH ItemSpend AS (
+    SELECT
+        ssd.ITEM_NAME,
+        SUM(ssd.TOTAL_MONEY_SPEND) AS ItemTotalSpend
+    FROM
+        SUPPLIER_SCORING_DATA ssd
+    GROUP BY
+        ssd.ITEM_NAME
+),
+TotalSpend AS (
+    SELECT
+        SUM(ssd.TOTAL_MONEY_SPEND) AS GrandTotalSpend
+    FROM
+        SUPPLIER_SCORING_DATA ssd
+),
+ItemPercentage AS (
+    SELECT
+        is.ITEM_NAME,
+        is.ItemTotalSpend,
+        ROUND((is.ItemTotalSpend / ts.GrandTotalSpend) * 100, 2) AS PercentageOfTotalSpend
+    FROM
+        ItemSpend is,
+        TotalSpend ts
+),
+RankedAndCumulative AS (
+    SELECT
+        ITEM_NAME,
+        ItemTotalSpend,
+        PercentageOfTotalSpend,
+        SUM(PercentageOfTotalSpend) OVER (ORDER BY PercentageOfTotalSpend DESC) AS CumulativePercentage
+    FROM
+        ItemPercentage
+    ORDER BY
+        PercentageOfTotalSpend DESC
+)
+SELECT
+    ITEM_NAME,
+    ItemTotalSpend,
+    PercentageOfTotalSpend,
+    CumulativePercentage
+FROM
+    RankedAndCumulative
+FETCH FIRST 5 ROWS ONLY 
    - "lowest"
    - "most"
    - "least"
@@ -129,10 +179,10 @@ C. If both A and B appear, A (raw_data) ALWAYS wins.
 ERROR HANDLING
 ────────────────────────
 
-31. If the user question cannot be answered using the provided metadata:
+32. If the user question cannot be answered using the provided metadata:
 - Set error_flag = 1
 - Return an empty string for sql_query
-32. Otherwise, always set error_flag = 0.
+33. Otherwise, always set error_flag = 0.
 
 ────────────────────────
 INPUT CONTEXT
@@ -162,18 +212,34 @@ Do NOT include explanations, comments, or markdown.
 ────────────────────────
 DEFAULT BEHAVIOR
 ────────────────────────
-33. If multiple interpretations exist, choose the most common business interpretation.
-34. If the user query is vague, generate a reasonable SQL query instead of asking clarifying questions.
+34. If multiple interpretations exist, choose the most common business interpretation.
+35. If the user query is vague, generate a reasonable SQL query instead of asking clarifying questions.
 
 ────────────────────────
 SQL SYNTAX SAFETY RULES
 ────────────────────────
  
-35. Ensure all parentheses are properly opened and closed.
-36. Do not leave incomplete clauses such as:
+36. Ensure all parentheses are properly opened and closed.
+37. Do not leave incomplete clauses such as:
     - unfinished WHERE conditions
     - incomplete subqueries
-37. Every subquery must be fully enclosed in parentheses.
-38. Do not end the SQL query with a semicolon (;).
-39. Ensure ORDER BY appears only after WHERE/GROUP BY.
-40. Ensure FETCH FIRST N ROWS ONLY appears only at the end of the query.
+38. Every subquery must be fully enclosed in parentheses.
+39. Do not end the SQL query with a semicolon (;).
+40. Ensure ORDER BY appears only after WHERE/GROUP BY.
+41. Ensure FETCH FIRST N ROWS ONLY appears only at the end of the query.
+
+────────────────────────
+NUMERIC FORMATTING RULES
+────────────────────────
+42. Percentage Formatting:
+- Whenever any percentage value is calculated or selected, it must be rounded to 2 decimal places.
+- Use Oracle ROUND(column_or_expression, 2)
+
+Example:
+ROUND((value / total_value) * 100, 2)
+
+43. Revenue formating:
+- Whenever 'Revenue' column is selected from any table, you need to append '$' sign.
+- sql quer for the same :
+    SELECT '$' || revenue AS revenue
+    FROM <table_name>;

@@ -1,110 +1,110 @@
 {
-    "table_name": "inventory_consumption_data",
-    "table_metadata": "This table tracks daily inventory consumption across three restaurant outlets (REST_A, REST_B, REST_C) of the Sarova hotel. It records the quantity of each SKU consumed, its item group category, and stock risk indicators. The table is used to analyze food and beverage demand, outlet-level consumption patterns, seasonality impact, and potential stockout risks.",
-  
-    "columns": {
-  
-      "DATE_COL": {
-        "type": "DATE",
-        "description": "Date when the inventory consumption was recorded"
-      },
-  
-      "OCCUPANCY": {
-        "type": "NUMBER",
-        "description": "Hotel occupancy percentage for the corresponding date used to correlate guest demand with consumption"
-      },
-  
-      "REVENUE": {
-        "type": "NUMBER",
-        "description": "Total hotel revenue for the corresponding date used for demand analysis"
-      },
-  
-      "ITEM_GROUP": {
-        "type": "VARCHAR2",
-        "values": [
-          "LAMB AND GOAT MEAT",
-          "POULTRY",
-          "MINERAL WATER",
-          "SODAS"
-        ],
-        "description": "Category of inventory item used for procurement and consumption analysis"
-      },
-  
-      "ITEM_NAME": {
-        "type": "VARCHAR2",
-        "values": [
-          "GOAT LEG",
-          "GOAT RIBS",
-          "CHICKEN LOLLIPOP",
-          "CHICKEN SAUSAGE VALUE PACK 1KG",
-          "MINERAL WATER AQUAMIST CLASSIC STILL 750ML",
-          "MINERAL WATER AQUELLE PET 500MLS BRANDED",
-          "GINGER ALE 300ML",
-          "GINGER ALE CAN 330ML"
-        ],
-        "description": "Specific inventory product or SKU consumed by hotel outlets"
-      },
-  
-      "TOTAL_ITEM_CONSUMED": {
-        "type": "NUMBER",
-        "description": "Total quantity of the SKU consumed on the given date across outlets"
-      },
-  
-      "SEASONALITY_INDEX": {
-        "type": "NUMBER",
-        "description": "Seasonality factor used to measure demand variation across time periods"
-      },
-  
-      "QUARTER": {
-        "type": "NUMBER",
-        "values": [1, 2, 3, 4],
-        "description": "Quarter derived from the consumption date"
-      },
-  
-      "YEAR": {
-        "type": "NUMBER",
-        "values": [2024, 2025, 2026],
-        "description": "Year derived from the consumption date"
-      },
-  
-      "OUTLET_A_CONSUMPTION": {
-        "type": "NUMBER",
-        "description": "Quantity of the SKU consumed in restaurant outlet A"
-      },
-  
-      "OUTLET_B_CONSUMPTION": {
-        "type": "NUMBER",
-        "description": "Quantity of the SKU consumed in restaurant outlet B"
-      },
-  
-      "OUTLET_C_CONSUMPTION": {
-        "type": "NUMBER",
-        "description": "Quantity of the SKU consumed in restaurant outlet C"
-      },
-  
-      "STOCKOUT_CATEGORY": {
-        "type": "VARCHAR2",
-        "values": [
-          "Enough stock",
-          "Moderate risk",
-          "High risk"
-        ],
-        "description": "Stock availability risk classification based on consumption patterns"
-      },
-  
-      "MONTH": {
-        "type": "VARCHAR2",
-        "values": [
-          "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-        ],
-        "description": "Month derived from the consumption date for seasonal analysis"
-      },
-      "DATA_TYPE":{
-        "type":"VARCHAR2",
-        "values":["HISTORICAL","FORECAST"],
-        "description":"Determines whether the data is forcasted or historical"
-      }
-  
+  "table_name": "inventory_consumption_data",
+  "table_metadata": "This table tracks daily inventory consumption across three restaurant outlets (REST_A, REST_B, REST_C) of the Sarova hotel. It records the quantity of each SKU consumed, its item group category, and stock risk indicators. The table is used to analyze food and beverage demand, outlet-level consumption patterns, seasonality impact, and potential stockout risks.",
+
+  "columns": {
+
+    "DATE_COL": {
+      "type": "DATE",
+      "description": "Date when the inventory consumption was recorded"
+    },
+
+    "OCCUPANCY": {
+      "type": "NUMBER",
+      "description": "Hotel occupancy percentage for the corresponding date used to correlate guest demand with consumption"
+    },
+
+    "REVENUE(USD)": {
+      "type": "NUMBER",
+      "description": "Total hotel revenue for the corresponding date used for demand analysis"
+    },
+
+    "ITEM_GROUP": {
+      "type": "VARCHAR2",
+      "values": [
+        "LAMB AND GOAT MEAT",
+        "POULTRY",
+        "MINERAL WATER",
+        "SODAS"
+      ],
+      "description": "Category of inventory item used for procurement and consumption analysis"
+    },
+
+    "ITEM_NAME": {
+      "type": "VARCHAR2",
+      "values": [
+        "GOAT LEG",
+        "GOAT RIBS",
+        "CHICKEN LOLLIPOP",
+        "CHICKEN SAUSAGE VALUE PACK 1KG",
+        "MINERAL WATER AQUAMIST CLASSIC STILL 750ML",
+        "MINERAL WATER AQUELLE PET 500MLS BRANDED",
+        "GINGER ALE 300ML",
+        "GINGER ALE CAN 330ML"
+      ],
+      "description": "Specific inventory product or SKU consumed by hotel outlets"
+    },
+
+    "TOTAL_ITEM_CONSUMED": {
+      "type": "NUMBER",
+      "description": "Total quantity of the SKU consumed on the given date across outlets"
+    },
+
+    "SEASONALITY_INDEX": {
+      "type": "NUMBER",
+      "description": "Seasonality factor used to measure demand variation across time periods"
+    },
+
+    "QUARTER": {
+      "type": "NUMBER",
+      "values": [1, 2, 3, 4],
+      "description": "Quarter derived from the consumption date"
+    },
+
+    "YEAR": {
+      "type": "NUMBER",
+      "values": [2024, 2025, 2026],
+      "description": "Year derived from the consumption date"
+    },
+
+    "OUTLET_A_CONSUMPTION": {
+      "type": "NUMBER",
+      "description": "Quantity of the SKU consumed in restaurant outlet A"
+    },
+
+    "OUTLET_B_CONSUMPTION": {
+      "type": "NUMBER",
+      "description": "Quantity of the SKU consumed in restaurant outlet B"
+    },
+
+    "OUTLET_C_CONSUMPTION": {
+      "type": "NUMBER",
+      "description": "Quantity of the SKU consumed in restaurant outlet C"
+    },
+
+    "STOCKOUT_CATEGORY": {
+      "type": "VARCHAR2",
+      "values": [
+        "Enough Stock",
+        "Moderate Risk",
+        "High Over Stock Risk"
+      ],
+      "description": "Stock availability risk classification based on consumption patterns"
+    },
+
+    "MONTH": {
+      "type": "VARCHAR2",
+      "values": [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      ],
+      "description": "Month derived from the consumption date for seasonal analysis"
+    },
+    "DATA_TYPE":{
+      "type":"VARCHAR2",
+      "values":["HISTORICAL","FORECAST"],
+      "description":"Determines whether the data is forcasted or historical"
     }
+
   }
+}

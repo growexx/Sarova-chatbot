@@ -9,7 +9,12 @@ Use the following to generate appropriate response
 Records : {num_records}
 Fields : {num_fields}
 
-3. DATA RECORDS (Maximum 20 rows from dataframe):
+3. Today's date
+{date_today}
+
+4. DATA RECORDS (Maximum 20 rows from dataframe):
 <DATA_RECORDS>
 {data_records}
 </DATA_RECORDS>
+
+

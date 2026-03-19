@@ -16,6 +16,9 @@ import re
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
+from datetime import date
+
+
 
 class PromptGenerator:
     """
@@ -70,7 +73,8 @@ class PromptGenerator:
             sql_query=sql_query,
             data_records=df.head(25).to_dict(orient="records"),
             num_records = num_of_records,
-            num_fields= num_fields
+            num_fields= num_fields,
+            today_date = date.today()
         )
         return assistanct_prompt
 
