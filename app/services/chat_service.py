@@ -290,7 +290,7 @@ class ChatService:
 
             selected_df.drop_duplicates(inplace=True)
             print(f"DataFrame shape: {selected_df.shape}")
-            selected_df = selected_df[smart_reorder(sql_query,selected_df.columns)]
+            # selected_df = selected_df[smart_reorder(sql_query,selected_df.columns)]
 
             print(50 * '═', " Context Management ", 50 * '═')
 
@@ -332,10 +332,15 @@ class ChatService:
             assistant_prompt = self.prompt_generator_client.generate_assistant_prompt(
                 sql_query, selected_df , num_of_records
             )
+            print(selected_df.head())
+            print(selected_df.info())
             for col in selected_df.columns:
                 if pd.api.types.is_datetime64_any_dtype(selected_df[col]):
                     selected_df[col] = selected_df[col].dt.date
+                    print("Date time columns are converted to date")
 
+            print(selected_df.head())
+            print(selected_df.info())
             chat_history.append({"role": "User", "message": user_message})
             chat_history.append({"role": "User", "message": assistant_prompt})
 
@@ -369,7 +374,13 @@ class ChatService:
         return final_response
 
     def scenario_based_response(self,num_of_records, selected_df,max_limit_query,sql_query, message,scenario):
-        if num_of_records > 100:
+        print(selected_df.head())
+        if num_of_records <10 and scenario == 'raw_data':
+            actual_par=None
+            final_response = self.prepare_data_response(
+                selected_df.head(20), sql_query, message ,"raw_data", actual_par
+            )
+        elif num_of_records > 100:
             print("Case 1 : X Large data , We will make excel and pass it as ")
             local_file_path, actual_par = prepare_local_file_and_par_url()
             print("Writing in par file")
@@ -388,6 +399,7 @@ class ChatService:
         else:
             print(f"scenraio is analysis , {scenario}")
             plot_paths = smart_plot(selected_df, 'temp_graph','graph')
+            print(selected_df.head())
             print(f"plot path is {plot_paths}")
             if len(plot_paths)!=0  :
                 plot_path = plot_paths[0]

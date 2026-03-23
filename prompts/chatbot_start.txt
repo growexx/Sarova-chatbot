@@ -26,6 +26,22 @@ CORE RULES
    * Do not provide extended explanations.
    * Do not include multiple paragraphs.
    * Keep the insight brief and directly actionable.
+
+────────────────────────────────
+SUPPLIER COUNT INSIGHT RULE
+────────────────────────────────
+
+If the result contains supplier and item-level data:
+
+- If only 1 unique supplier exists for an item:
+  Include: "For this item, only 1 supplier is available, hence only 1 result is shown."
+
+- If the number of unique suppliers for an item is less than 3:
+  Include: "There are only {N} suppliers available for this item."
+
+- If 3 suppliers exist:
+  Do not include any supplier count message.
+
 ────────────────────────────────
 ANALYSIS INSTRUCTIONS
 ────────────────────────────────

@@ -74,7 +74,7 @@ class PromptGenerator:
             data_records=df.head(25).to_dict(orient="records"),
             num_records = num_of_records,
             num_fields= num_fields,
-            today_date = date.today()
+            date_today = date.today()
         )
         return assistanct_prompt
 

@@ -14,7 +14,7 @@
       "description": "Hotel occupancy percentage for the corresponding date used to correlate guest demand with consumption"
     },
 
-    "REVENUE(USD)": {
+    "REVENUE_USD": {
       "type": "NUMBER",
       "description": "Total hotel revenue for the corresponding date used for demand analysis"
     },
@@ -82,16 +82,6 @@
       "description": "Quantity of the SKU consumed in restaurant outlet C"
     },
 
-    "STOCKOUT_CATEGORY": {
-      "type": "VARCHAR2",
-      "values": [
-        "Enough Stock",
-        "Moderate Risk",
-        "High Over Stock Risk"
-      ],
-      "description": "Stock availability risk classification based on consumption patterns"
-    },
-
     "MONTH": {
       "type": "VARCHAR2",
       "values": [
@@ -104,6 +94,31 @@
       "type":"VARCHAR2",
       "values":["HISTORICAL","FORECAST"],
       "description":"Determines whether the data is forcasted or historical"
+    },
+
+    "COST_OF_CONSUMPTION":{
+      "type":"NUMBER",
+      "description":"Total consumption cost of a SKU for a given date, calculated as TOTAL_ITEM_CONSUMED multiplied by the weighted average unit procurement price.This column represents the estimated procurement cost incurred for consumed inventory and is used for cost analysis, spend tracking, and forecasting of food and beverage expenses over time.This column should be used when answering questions related to inventory consumption cost, food and beverage cost analysis, SKU-level spend contribution, and time-based cost trends."
+    },
+
+    "STOCK_ON_HAND":{
+      "type":"NUMBER",
+      "description":"Represents the available inventory quantity of a SKU at the end of each day after accounting for consumption and replenishment events; used to monitor stock levels, trigger reordering decisions, and assess stockout or overstock risk over time."
+    },
+
+    "REORDER_FLAG":{
+      "type":"NUMBER",
+      "description":"Binary indicator where 1 represents that a reorder was triggered on that day due to stock falling below the defined threshold, and 0 indicates no reorder action was taken."
+    },
+
+    "STOCKOUT_CATEGORY": {
+      "type": "VARCHAR2",
+      "values": [
+        "UNDER STOCK",
+        "ENOUGH STOCK",
+        "OVER STOCK"
+      ],
+      "description": "Stock availability risk classification based on consumption patterns"
     }
 
   }

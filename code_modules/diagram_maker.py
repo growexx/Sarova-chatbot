@@ -49,12 +49,12 @@ _WIN_DIFF_HINTS    = ["lag", "lead", "diff", "pct_change"]
 _WIN_ALL_HINTS     = _WIN_RANK_HINTS + _WIN_RUNNING_HINTS + _WIN_DIFF_HINTS
 
 _BAR_COLORS = [
-    "#F59E0B",  # Amber
-    "#22C55E",  # Green
-    "#EF4444",  # Red
-    "#4F46E5",  # Indigo
-    "#06B6D4",  # Cyan
-    "#A855F7",
+    "#1E1B4B",  # Deep Indigo (darker base)
+    "#2C1A67",  # Your Indigo
+    "#312E81",  # Indigo-800
+    "#3730A3",  # Indigo-700
+    "#4338CA",  # Indigo-600
+    "#6366F1",  # Indigo-500 (highlight)
 ]
 
 
@@ -217,13 +217,17 @@ def _draw_legend_table(ax: plt.Axes, legend: dict) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _scales_differ(s1: pd.Series, s2: pd.Series, threshold: float = 10.0) -> bool:
-    """True when the two series have very different value ranges."""
-    r1 = s1.max() - s1.min()
-    r2 = s2.max() - s2.min()
-    if r1 == 0 or r2 == 0:
-        return False
-    return max(r1, r2) / min(r1, r2) > threshold
+    """True when two series have very different magnitudes."""
 
+    max1, max2 = s1.max(), s2.max()
+
+    # handle constant column case
+    if max1 == 0 or max2 == 0:
+        return True
+
+    ratio = max(max1, max2) / max(min(max1, max2), 1e-9)
+
+    return ratio > threshold
 
 def _bar_labels(ax: plt.Axes, x: list, values, fmt: str = "{:,.1f}") -> None:
     """Annotate bar tops with their values."""
@@ -432,33 +436,51 @@ def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = 
     elif len(num) == 1 and cat:
         print("Scenario 5: num_1 and category Diagram")
 
-        label_col = _pick_label_col(cat, df)
+        # 👉 Detect Year + Month case
+        if "Year" in df.columns and "Month" in df.columns:
+            print("→ Detected Year + Month → using Time Series")
 
-        # Aggregate first (important for pie)
-        plot_df = df.groupby(label_col)[num[0]].sum().reset_index()
+            # Create proper date
+            df["Date"] = pd.to_datetime(
+                df["Year"].astype(str) + "-" + df["Month"],
+                format="%Y-%b",
+                errors="coerce"
+            ).dt.date
 
-        n_unique = plot_df[label_col].nunique()
+            df = df.sort_values("Date")
 
-        # 🎯 Decide PIE vs BAR
-        if 2 <= n_unique <= 6:
-            print("→ Using PIE chart")
+            ax.plot(df["Date"], df[num[0]],
+                    marker="o", color=_BAR_COLORS[3])
 
-            ax.pie(
-                plot_df[num[0]],
-                labels=plot_df[label_col],
-                autopct="%1.1f%%",
-                colors=_BAR_COLORS[:n_unique],
-                startangle=90
-            )
-
-            ax.axis("equal")  # makes it circular
+            ax.set_xlabel("Date")
+            ax.set_ylabel(num[0])
 
         else:
-            print("→ Using BAR chart")
-            _plot_single_bar(ax, df, label_col, num[0])
+            # fallback to your original logic
+            label_col = _pick_label_col(cat, df)
+
+            plot_df = df.groupby(label_col)[num[0]].sum().reset_index()
+            n_unique = plot_df[label_col].nunique()
+
+            if 2 <= n_unique <= 6:
+                print("→ Using PIE chart")
+
+                ax.pie(
+                    plot_df[num[0]],
+                    labels=plot_df[label_col],
+                    autopct="%1.1f%%",
+                    colors=_BAR_COLORS[:n_unique],
+                    startangle=90
+                )
+                ax.axis("equal")
+
+            else:
+                print("→ Using BAR chart")
+                _plot_single_bar(ax, df, label_col, num[0])
 
         ax.set_title(title)
-    # ── 2 numeric + many rows → scatter ──────────────────────────────
+
+
     elif len(num) == 2 and n_rows > 50:
         print("Scenario 6: num_2 and many rows Diagram")
         ax.scatter(df[num[0]], df[num[1]], alpha=0.5, s=20, color=_BAR_COLORS[3])
@@ -479,6 +501,35 @@ def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = 
             _plot_same_scale_bar(ax, df, label_col, num, cleaned, legend)
         fig.suptitle(title, fontsize=12)
 
+    elif len(num) >= 2 and (dates or ("Month" in df.columns and "Year" in df.columns)):
+        print("Scenario NEW: Time series with multiple metrics")
+
+        # Create proper datetime column
+        if "Year" in df.columns and "Month" in df.columns:
+            df["Date"] = pd.to_datetime(df["Year"].astype(str) + "-" + df["Month"], errors="coerce")
+            df = df.sort_values("Date")
+            x_col = "Date"
+        else:
+            x_col = dates[0]
+
+        main_col = num[0]
+
+        ax.plot(df[x_col], df[main_col],
+                marker="o", color=_BAR_COLORS[3], label=main_col)
+
+        # Optional: plot % change if exists
+        pct_cols = [c for c in num if "pct" in c.lower() or "change" in c.lower()]
+        if pct_cols:
+            ax2 = ax.twinx()
+            ax2.plot(df[x_col], df[pct_cols[0]],
+                    linestyle="--", color=_BAR_COLORS[5], label=pct_cols[0])
+            ax2.set_ylabel(pct_cols[0])
+            ax2.legend(loc="upper right")
+
+        ax.set_xlabel(x_col)
+        ax.set_ylabel(main_col)
+        ax.legend(loc="upper left")
+        ax.set_title(title)
     else:
         print("Scenario 9: leftover table Diagram")
         plt.close(fig)
