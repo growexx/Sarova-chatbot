@@ -25,6 +25,7 @@ import seaborn as sns
 import os
 from datetime import datetime
 import uuid
+import textwrap
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONSTANTS
@@ -141,7 +142,6 @@ def _classify_columns(df: pd.DataFrame) -> dict:
 def _truncate(s: str, n: int) -> str:
     return s[:n] + "…" if len(s) > n else s
 
-
 def _pick_label_col(cat_cols: list, df: pd.DataFrame) -> str:
     """Choose the most meaningful category column to use as bar labels."""
     if len(cat_cols) == 1:
@@ -159,33 +159,6 @@ def _pick_label_col(cat_cols: list, df: pd.DataFrame) -> str:
                 return col
 
     return max(variable_cols, key=lambda c: df[c].nunique())
-
-
-# def _clean_labels(labels: list, max_chars: int = 18,
-#                   max_bars_before_number: int = 10) -> tuple[list, dict | None]:
-#     """
-#     Returns (display_labels, legend_map_or_None).
-#     Strategies:
-#       - Too many bars  → number them + return lookup dict
-#       - Long avg name  → textwrap
-#       - Very long name → truncate with ellipsis
-#     """
-#     n = len(labels)
-#     avg_len = sum(len(str(l)) for l in labels) / max(n, 1)
-
-#     if n > max_bars_before_number:
-#         legend = {str(i + 1): str(l) for i, l in enumerate(labels)}
-#         return [str(i + 1) for i in range(n)], legend
-
-#     if avg_len > 30:
-#         return [_truncate(str(l), max_chars) for l in labels], None
-
-#     if avg_len > 20:
-#         return [textwrap.fill(str(l), width=15) for l in labels], None
-
-#     return [str(l) for l in labels], None
-
-import textwrap
 
 def _clean_labels(labels: list, max_chars: int = 20,
                   max_bars_before_number: int = 10) -> tuple[list, dict | None]:
@@ -211,7 +184,6 @@ def _draw_legend_table(ax: plt.Axes, legend: dict) -> None:
     ax.figure.text(0.55, -0.02, "\n".join(lines[half:]),
                    fontsize=7, va="top", family="monospace")
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 # CHART HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -234,7 +206,6 @@ def _bar_labels(ax: plt.Axes, x: list, values, fmt: str = "{:,.1f}") -> None:
     for xi, val in zip(x, values):
         ax.text(xi, val * 1.01, fmt.format(val),
                 ha="center", va="bottom", fontsize=7)
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CHART RENDERERS  (each takes ax + data slice; returns nothing)
@@ -279,7 +250,7 @@ def _plot_line(ax: plt.Axes, df: pd.DataFrame,
 def _plot_single_bar(ax: plt.Axes, df: pd.DataFrame,
                      label_col: str, val_col: str) -> None:
     plot_df    = df[[label_col, val_col]].dropna()
-    plot_df    = plot_df.sort_values(val_col, ascending=False).head(25)
+    plot_df    = plot_df.head(25)
     raw_labels = plot_df[label_col].astype(str).tolist()
     avg_len    = sum(len(l) for l in raw_labels) / max(len(raw_labels), 1)
     cleaned, legend = _clean_labels(raw_labels)
@@ -297,9 +268,6 @@ def _plot_single_bar(ax: plt.Axes, df: pd.DataFrame,
 
     if legend:
         _draw_legend_table(ax, legend)
-
-
-
 
 def _plot_dual_subplot(fig: plt.Figure, df: pd.DataFrame,
                        label_col: str, num_cols: list,
@@ -324,7 +292,6 @@ def _plot_dual_subplot(fig: plt.Figure, df: pd.DataFrame,
 
     return fig2
 
-
 def _plot_same_scale_bar(ax: plt.Axes, df: pd.DataFrame,
                          label_col: str, num_cols: list,
                          cleaned_labels: list, legend: dict | None) -> None:
@@ -341,15 +308,12 @@ def _plot_same_scale_bar(ax: plt.Axes, df: pd.DataFrame,
     if legend:
         _draw_legend_table(ax, legend)
 
-
-
 def compress_label(s: str) -> str:
     if not isinstance(s, str):
         return s
 
     words = s.split()
 
-    # If <= 3 words → keep as is
     if len(words) <= 3:
         return s
 
@@ -373,6 +337,35 @@ def compress_label(s: str) -> str:
 # PUBLIC ENTRY POINT
 # ══════════════════════════════════════════════════════════════════════════════
 
+def sort_by_month(df, month_col="Month"):
+    print("Month col sorting")
+
+    # 👉 If column exists → normal case
+    if month_col in df.columns:
+        m = df[month_col].astype(str).str.strip().str.lower()
+    else:
+        # 👉 Handle index case
+        m = df.index.astype(str)
+        m = pd.Series(m).str.strip().str.lower()
+
+    month_map = {
+        "jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,
+        "jul":7,"aug":8,"sep":9,"sept":9,"oct":10,"nov":11,"dec":12
+    }
+
+    month_num = m.str[:4].map(month_map)
+
+    if month_col in df.columns:
+        df["_month_num"] = month_num
+        df = df.sort_values("_month_num")
+        df.drop(columns=["_month_num"], inplace=True)
+    else:
+        df["_month_num"] = month_num.values
+        df = df.sort_values("_month_num")
+        df = df.drop(columns=["_month_num"])
+
+    return df
+
 def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = "Query Result") -> None:
     """
     Auto-detect the shape of a SQL result DataFrame and render
@@ -386,7 +379,21 @@ def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = 
     unique_id = uuid.uuid4().hex[:8]
     os.makedirs(output_dir, exist_ok=True)
     plot_paths = []
-    
+
+    if "Year" in df.columns and "Month" in df.columns:
+        print("→ Detected Year + Month → using Time Series")
+        df["Date"] = pd.to_datetime(
+            df["Year"].astype(str) + "-" + df["Month"],
+            format="%Y-%b",
+            errors="coerce")
+        df = df.sort_values("Date")
+        df.drop(["Year", "Month"], axis=1, inplace=True)
+    elif "Month" in df.columns:
+        print("only month detected")
+        df = sort_by_month(df, month_col="Month")
+
+
+    print(df)
     cols   = _classify_columns(df)
     num    = cols["num_cols"]
     cat    = cols["cat_cols"]
@@ -394,6 +401,7 @@ def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = 
     wins   = cols["win_cols"]
     all_n  = cols["all_num"]
     n_rows = len(df)
+
 
 
     if n_rows < 3:
@@ -432,23 +440,12 @@ def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = 
         _plot_line(ax, df, dates[0], num[0])
         ax.set_title(title)
 
-
-    elif len(num) == 1 and cat:
+    elif len(num) == 1 and len(cat)==1:
         print("Scenario 5: num_1 and category Diagram")
 
         # 👉 Detect Year + Month case
         if "Year" in df.columns and "Month" in df.columns:
-            print("→ Detected Year + Month → using Time Series")
-
-            # Create proper date
-            df["Date"] = pd.to_datetime(
-                df["Year"].astype(str) + "-" + df["Month"],
-                format="%Y-%b",
-                errors="coerce"
-            ).dt.date
-
-            df = df.sort_values("Date")
-
+            
             ax.plot(df["Date"], df[num[0]],
                     marker="o", color=_BAR_COLORS[3])
 
@@ -465,13 +462,21 @@ def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = 
             if 2 <= n_unique <= 6:
                 print("→ Using PIE chart")
 
-                ax.pie(
+                wedges, texts, autotexts = ax.pie(
                     plot_df[num[0]],
                     labels=plot_df[label_col],
                     autopct="%1.1f%%",
                     colors=_BAR_COLORS[:n_unique],
-                    startangle=90
+                    textprops={"color": "white"}
                 )
+                for text in texts:
+                    text.set_color("black")   # safer than white
+                    text.set_fontsize(9)
+
+                for autotext in autotexts:
+                    autotext.set_color("white")
+                    autotext.set_fontsize(8)
+                
                 ax.axis("equal")
 
             else:
@@ -480,6 +485,27 @@ def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = 
 
         ax.set_title(title)
 
+    elif len(num) == 1 and len(cat)== 2:
+        print("Scenario: 5.22 categorical + 1 numeric → Grouped Bar")
+
+        cat1, cat2 = cat[0], cat[1]
+
+        plot_df = df.groupby([cat1, cat2])[num[0]].sum().reset_index()
+
+        pivot_df = plot_df.pivot(index=cat1, columns=cat2, values=num[0]).fillna(0)
+        pivot_df  = sort_by_month(pivot_df, month_col="Month")
+        print("Pivot df is here ")
+        print(pivot_df)
+        pivot_df.plot(
+            kind="bar",
+            ax=ax,
+            colormap="tab20"
+        )
+
+        ax.set_xlabel(cat1)
+        ax.set_ylabel(num[0])
+        ax.set_title(title)
+        ax.legend(title=cat2)
 
     elif len(num) == 2 and n_rows > 50:
         print("Scenario 6: num_2 and many rows Diagram")
@@ -492,7 +518,6 @@ def smart_plot(df: pd.DataFrame, output_dir: str,file_prefix: str, title: str = 
     elif len(num) == 2 and cat:
         print("Scenario 7: num_2 and category Diagram")
         label_col = _pick_label_col(cat, df)
-        df        = df.sort_values(num[0], ascending=False).reset_index(drop=True)
         cleaned, legend = _clean_labels(df[label_col].astype(str).tolist())
 
         if _scales_differ(df[num[0]], df[num[1]]):

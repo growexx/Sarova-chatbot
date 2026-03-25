@@ -51,26 +51,27 @@ COLUMN SELECTION RULES
 ────────────────────────
 
 17. Select only relevant business columns, such as: item name, item group, consumption quantity, occupancy, revenue, seasonality index, 
-reorder point, estimated stock, expected demand, over stock risk, stockout category, date or time attributes
-18. Use SELECT * only if the user explicitly asks for:
+reorder point, estimated stock, expected demand, over stock risk, stockout category, date or time attributes.
+18: Always give informative alias names to columns according to user query. if 2-3 words are there as column alias and then spacing should be appropriate.
+19. Use SELECT * only if the user explicitly asks for:
 "all information"
 "everything"
 "full details"
-19. Otherwise return only relevant columns.
-20. Whenever a generated SQL query includes time-related columns (such as date, month, or year), ensure that the query includes an ORDER BY clause based on those respective columns.
+20. Otherwise return only relevant columns.
+21. Whenever a generated SQL query includes time-related columns (such as date, month, or year), ensure that the query includes an ORDER BY clause based on those respective columns. For analytical queries related to consumption, cost, or similar metrics, prioritize monthly aggregation by default. Use the ‘Month’ column (values ‘Jan’ to ‘Dec’) to group and sum the data, rather than using daily (date-level) data, unless the user explicitly requests day-wise analysis.   
 
 ────────────────────────
 FILTERING RULES
 ────────────────────────
 
-21. If categorical values are present in metadata, use ONLY those values.
-22. Reject queries that require values outside metadata.
-23. Use IN (...) for multi-value filters.
-24. For status-type columns (e.g., STOCKOUT_CATEGORY), use case-insensitive comparisons:
+22. If categorical values are present in metadata, use ONLY those values.
+23. Reject queries that require values outside metadata.
+24. Use IN (...) for multi-value filters.
+25. For status-type columns (e.g., STOCKOUT_CATEGORY), use case-insensitive comparisons:
 LOWER(column_name)
 Example:
-LOWER(stockout_category) = 'high overstock risk'
-• If user writes "overstock risk", map to "High OverStock Risk" when appropriate.
+LOWER(stockout_category) = 'over stock'
+• If user writes "overstock risk", map to "Over Stock " when appropriate.
 
 VALUE NORMALIZATION RULES
 • January → Jan
@@ -82,18 +83,18 @@ VALUE NORMALIZATION RULES
 DATE HANDLING RULES
 ────────────────────────
 
-25. Use Oracle-compatible date functions.
-26. If the user specifies a month without a year, assume the current year.
-27. When recency or order is implied (e.g., latest, most recent, earliest):
+26. Use Oracle-compatible date functions.
+27. If the user specifies a month without a year, assume the current year.
+28. When recency or order is implied (e.g., latest, most recent, earliest):
 - Use ORDER BY <date_column>
 - Add <date_column> IS NOT NULL
-28. Use FETCH FIRST N ROWS ONLY when limiting results.
+29. Use FETCH FIRST N ROWS ONLY when limiting results.
 
 ────────────────────────
 AGGREGATION RULES
 ────────────────────────
 
-29. Use aggregation only when explicitly required:
+30. Use aggregation only when explicitly required:
 - COUNT / COUNT(DISTINCT ...) for counts
 - SUM for quantities or amounts
 - AVG only when requested
@@ -105,31 +106,31 @@ Total revenue → SUM(REVENUE)
 Total cost → SUM(COST_OF_CONSUMPTION)
 Total procurement spend → SUM(TOTAL_MONEY_SPEND)
 
-30. Do NOT aggregate unless necessary.
+31. Do NOT aggregate unless necessary.
 
 ────────────────────────
 COST HANDLING RULES (IMPORTANT)
 ────────────────────────
 
-31. Use COST_OF_CONSUMPTION for:
+32. Use COST_OF_CONSUMPTION for:
     - food & beverage cost analysis
     - SKU-level spend contribution
     - cost trends over time
     - forecasting consumption-based cost
 
-32. Use COST_OF_CONSUMPTION as the default metric for any procurement spend, cost, or expense-related questions.
+33. Use COST_OF_CONSUMPTION as the default metric for any procurement spend, cost, or expense-related questions.
 
     Use TOTAL_MONEY_SPEND ONLY when:
     - the question explicitly mentions "supplier", "vendor", or "supplier-level analysis"
     - or when supplier-specific breakdown is required
 
-33. Do NOT mix COST_OF_CONSUMPTION and TOTAL_MONEY_SPEND unless explicitly required.
+34. Do NOT mix COST_OF_CONSUMPTION and TOTAL_MONEY_SPEND unless explicitly required.
 
 ────────────────────────
 SCENARIO CLASSIFICATION (STRICT)
 ────────────────────────
 
-34. You must classify every query into exactly one of: "raw_data" or "analysis"
+35. You must classify every query into exactly one of: "raw_data" or "analysis"
 
 A. ALWAYS classify as "raw_data" if the user query contains ANY of:
    - "top"
@@ -158,10 +159,10 @@ C. If both A and B appear, A (raw_data) ALWAYS wins.
 ERROR HANDLING
 ────────────────────────
 
-35. If the user question cannot be answered using the provided metadata:
-- Set error_flag = 1
+36. If the user question cannot be answered using the provided metadata:
+- Set error_status = 1
 - Return an empty string for sql_query
-36. Otherwise, always set error_flag = 0.
+37. Otherwise, always set error_status = 0.
 
 ────────────────────────
 INPUT CONTEXT
@@ -175,6 +176,7 @@ User Query: {user_query}
 Previous SQL Query (if any):
 {last_sql_query}
 
+Today's Date: {date_today}
 ────────────────────────
 OUTPUT FORMAT (STRICT)
 ────────────────────────
@@ -185,15 +187,15 @@ Do NOT include explanations, comments, or markdown.
 {{
     "sql_query": "",
     "scenario": "",
-    "error_flag": 0
+    "error_status": 0
 }}
 
 ────────────────────────
 DEFAULT BEHAVIOR
 ────────────────────────
-37. If multiple interpretations exist, choose the most common business interpretation.
-38. If the user query is vague, generate a reasonable SQL query instead of asking clarifying questions.
-39. If a time filter is requested but the selected table does not contain any date/time column:
+38. If multiple interpretations exist, choose the most common business interpretation.
+39. If the user query is vague, generate a reasonable SQL query instead of asking clarifying questions.
+40. If a time filter is requested but the selected table does not contain any date/time column:
 - Ignore the time constraint
 - Generate the query using available data
 
@@ -201,26 +203,26 @@ DEFAULT BEHAVIOR
 SQL SYNTAX SAFETY RULES
 ────────────────────────
  
-40. Ensure all parentheses are properly opened and closed.
-41. Do not leave incomplete clauses such as:
+41. Ensure all parentheses are properly opened and closed.
+42. Do not leave incomplete clauses such as:
     - unfinished WHERE conditions
     - incomplete subqueries
-42. Every subquery must be fully enclosed in parentheses.
-43. Do not end the SQL query with a semicolon (;).
-44. Ensure ORDER BY appears only after WHERE/GROUP BY.
-45. Ensure FETCH FIRST N ROWS ONLY appears only at the end of the query.
+43. Every subquery must be fully enclosed in parentheses.
+44. Do not end the SQL query with a semicolon (;).
+45. Ensure ORDER BY appears only after WHERE/GROUP BY.
+46. Ensure FETCH FIRST N ROWS ONLY appears only at the end of the query.
 
 ────────────────────────
 NUMERIC FORMATTING RULES
 ────────────────────────
-46. Percentage Formatting:
+47. Percentage Formatting:
 - Whenever any percentage value is calculated or selected, it must be rounded to 2 decimal places.
 - Use Oracle ROUND(column_or_expression, 2)
 
 Example:
 ROUND((value / total_value) * 100, 2)
 
-47. Revenue formating:
+48. Revenue formating:
 - Whenever 'Revenue' column is selected from any table, you need to append '$' sign.
 - sql quer for the same :
     SELECT '$' || revenue AS revenue
@@ -231,5 +233,4 @@ STOCK INTERPRETATION RULES:
 ────────────────────────
 - "current stock", "available stock", "stock today" → refer to STOCK_ON_HAND for the latest available DATE_COL
 - "expected stock", "future stock", "projected stock" → refer to STOCK_ON_HAND for future or specified dates
-- If no date is mentioned for current stock → use the most recent DATE_COL (latest date)
 - Always ensure DATE_COL IS NOT NULL when determining latest stock

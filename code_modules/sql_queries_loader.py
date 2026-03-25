@@ -30,7 +30,7 @@ class SqlQueryLoader:
         Load query
         """
         return {
-            "load_chats_preview": f""" SELECT * FROM USER_CHATS  WHERE user_id = '{user_id}'"""
+            "load_chats_preview": f""" SELECT * FROM USER_CHATS  WHERE user_id = '{user_id}' order by UPDATED_AT DESC , CREATED_AT DESC"""
         }
 
     @staticmethod
@@ -69,6 +69,14 @@ class SqlQueryLoader:
                 f"INSERT INTO CHAT_MESSAGES (CHAT_ID, MESSAGE_NO, MESSAGE, ROLE) "
                 f"VALUES ('{chat_id}', {message_no}, '{msg_safe}', '{role}')"
             )
+        }
+
+    @staticmethod
+    def update_user_chats_updated_at(chat_id: str):
+        """Set ``UPDATED_AT`` to the database current timestamp for this chat."""
+        return {
+            "query": "UPDATE USER_CHATS SET UPDATED_AT = CURRENT_TIMESTAMP WHERE CHAT_ID = :1",
+            "params": (chat_id,),
         }
 
     @staticmethod

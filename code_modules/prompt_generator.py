@@ -18,8 +18,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 from datetime import date
 
-
-
 class PromptGenerator:
     """
     Generates structured prompts for different stages of LLM interaction.
@@ -74,7 +72,7 @@ class PromptGenerator:
             data_records=df.head(25).to_dict(orient="records"),
             num_records = num_of_records,
             num_fields= num_fields,
-            date_today = date.today()
+            date_today = "January 1st , 2026"
         )
         return assistanct_prompt
 
@@ -111,7 +109,8 @@ class PromptGenerator:
         prompt = template.format(
             user_query=user_query,
             metadata=metadata,
-            last_sql_query=last_sql
+            last_sql_query=last_sql,
+            date_today = "January 1st , 2026"
         )
         return prompt
 

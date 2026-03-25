@@ -251,7 +251,7 @@ class ChatService:
             )
             print(f"[SQL Gen] error_status={error_status}")
 
-            if error_status == 1 or error_status == "1":
+            if error_status == 1 or error_status == "1" or sql_query is None or not sql_query.strip():
                 final_response["llm_response"] = "Failed to generate query as it extends beyond the scope of Data. Please try with another query."
                 final_response["status"]= 2
                 raise JumpToFinally()
@@ -363,6 +363,7 @@ class ChatService:
             final_response , actual_par= self.scenario_based_response(num_of_records, selected_df,max_limit_query,sql_query, message,scenario)
             rows.append((chat_id, message_no + 4, actual_par, "PAR"))
             asyncio.create_task(self._background_message_insert(rows))
+            asyncio.create_task(self._chat_time_update(chat_id))
         except JumpToFinally:
             pass
         except Exception as e:
@@ -378,7 +379,7 @@ class ChatService:
         if num_of_records <10 and scenario == 'raw_data':
             actual_par=None
             final_response = self.prepare_data_response(
-                selected_df.head(20), sql_query, message ,"raw_data", actual_par
+                selected_df, sql_query, message ,"raw_data", actual_par
             )
         elif num_of_records > 100:
             print("Case 1 : X Large data , We will make excel and pass it as ")
@@ -408,8 +409,9 @@ class ChatService:
             else:
                 actual_par = None
             final_response = self.prepare_data_response(
-                selected_df.head(20), sql_query, message ,scenario, actual_par
+                selected_df, sql_query, message ,scenario, actual_par
             )
+            print(final_response)
         return final_response , actual_par
 
     def prepare_last_sql_query(self,last_sql_query, chat_id):
@@ -420,6 +422,15 @@ class ChatService:
                 last_sql_query = self.adb_client.execute_scalar(conn,get_last_sql_query)
             print(f"Last sql query for chat_id {chat_id} is {last_sql_query}.")
         return last_sql_query
+
+    async def _chat_time_update(self, chat_id: str):
+        touch = self.sql_loader.update_user_chats_updated_at(chat_id)
+        start = time.perf_counter()
+        with self.adb_client.get_connection() as conn:
+            self.adb_client.execute_single_non_query(
+                conn, touch["query"], touch["params"]
+            )
+        log_time("DB chat time updsated", start)
 
     @staticmethod
     def prepare_message_no(message_no_df):
@@ -465,6 +476,8 @@ class ChatService:
         """
         # ── Small result: return inline ────────────────────────────────────
         if selected_df is not None:
+            for col in selected_df.select_dtypes(include=["datetime64[ns]"]).columns:
+                selected_df[col] = selected_df[col].dt.strftime("%Y-%m")
             selected_df = selected_df.replace([np.nan, np.inf, -np.inf], None).to_dict(orient="records")
 
         return {
